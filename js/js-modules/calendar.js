@@ -7,6 +7,7 @@
   let view = new Date(); view.setDate(1);
   let events = []; // 缓存，避免每次重绘重新读库
   let tasks = [];  // 待办缓存（与日程统一展示）
+  let habitList = [], logList = [], finList = []; // 日详情用缓存，避免每次打卡反复读库（M1）
 
   function weekdayCN(d) { const w = '日一二三四五六'; return '周' + w[new Date(d).getDay()]; }
 
@@ -44,6 +45,9 @@
   async function render(root) {
     events = (await store.getAll('calendar')).filter(i => !i._deleted);
     tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
+    habitList = (await store.getAll('habits')).filter(i => !i._deleted);
+    logList = (await store.getAll('habitlogs')).filter(i => !i._deleted);
+    finList = (await store.getAll('finance')).filter(i => !i._deleted);
     root.innerHTML = `
       <div class="page">
         <div class="page-head">
@@ -162,17 +166,17 @@
 
     async function paintDay(dateKey) {
       const dayEvents = events.filter(e => e.startDate === dateKey).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
-      const tasks = (await store.getAll('tasks')).filter(i => !i._deleted && i.dueDate === dateKey);
-      const habits = (await store.getAll('habits')).filter(i => !i._deleted);
-      const logs = (await store.getAll('habitlogs')).filter(i => !i._deleted);
-      const finance = (await store.getAll('finance')).filter(i => !i._deleted && (i.date || '') === dateKey);
+      const dayTasks = tasks.filter(i => !i._deleted && i.dueDate === dateKey);
+      const habits = habitList;
+      const logs = logList;
+      const finance = finList.filter(i => (i.date || '') === dateKey);
 
       const logMap = {}; logs.forEach(l => { if (l && l.id) logMap[l.id] = l; });
 
       // 统一展示：当日待办 = 定时日程(遗留) + 当天待办，不再分两块
       const items = [];
       dayEvents.forEach(e => items.push({ kind: 'ev', sort: e.startTime || '99:99', raw: e }));
-      tasks.forEach(t => items.push({ kind: 'todo', sort: '99:99', raw: t }));
+      dayTasks.forEach(t => items.push({ kind: 'todo', sort: '99:99', raw: t }));
       items.sort((a, b) => a.sort.localeCompare(b.sort));
       const dayHTML = items.length ? items.map(it => {
         if (it.kind === 'ev') {
@@ -220,7 +224,7 @@
       if (e.target.closest('.dd-back')) { closeDay(); return; }
       if (e.target.closest('[data-add="task"]')) { openTaskForm(null, dd.dataset.key); return; }
       const evItem = e.target.closest('.dd-item.ev');
-      if (evItem && (e.target.classList.contains('dd-edit') || e.target.closest('.dd-body'))) {
+      if (evItem && (e.target.closest('.dd-edit') || e.target.closest('.dd-body'))) {
         openForm(await store.get('calendar', evItem.dataset.id)); return;
       }
       const todoItem = e.target.closest('.dd-item.todo');
@@ -231,9 +235,12 @@
       const habitBtn = e.target.closest('.habit-check');
       if (habitBtn) {
         const hid = habitBtn.dataset.id; const key = hid + ':' + dd.dataset.key;
-        const rec = (await store.getAll('habitlogs')).find(l => l.id === key);
+        const rec = logList.find(l => l.id === key);
         const done = !(rec && rec.done);
-        await store.put('habitlogs', { id: key, habitId: hid, date: dd.dataset.key, done, updatedAt: Date.now() });
+        const newRec = { id: key, habitId: hid, date: dd.dataset.key, done, updatedAt: Date.now() };
+        await store.put('habitlogs', newRec);
+        const idx = logList.findIndex(l => l.id === key);
+        if (idx >= 0) logList[idx] = newRec; else logList.push(newRec);
         paintDay(dd.dataset.key); return;
       }
     });
