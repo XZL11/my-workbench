@@ -107,5 +107,5 @@
     });
   }
 
-  WB.modules.push({ id: 'content', title: '创作', icon: '🎬', render });
+  WB.modules.push({ id: 'content', title: '创作', icon: 'pen', render });
 })(window.WB = window.WB || {});
