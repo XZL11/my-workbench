@@ -638,3 +638,11 @@ input.chk:hover { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(79, 7
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 65%, transparent); }
 
+/* 日历：待办并入日程展示 */
+.cal-ev.todo { border-left-color: var(--primary); }
+.cal-ev.todo.pri-1 { border-left-color: #ef4444; }
+.cal-ev.todo.pri-2 { border-left-color: #f59e0b; }
+.cal-ev.todo.pri-3 { border-left-color: #10b981; }
+.cal-ev.todo.done { opacity: .45; text-decoration: line-through; }
+.dd-item.todo.done .dd-title { text-decoration: line-through; opacity: .55; }
+
