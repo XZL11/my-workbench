@@ -646,3 +646,144 @@ input.chk:hover { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(79, 7
 .cal-ev.todo.done { opacity: .45; text-decoration: line-through; }
 .dd-item.todo.done .dd-title { text-decoration: line-through; opacity: .55; }
 
+/* ============================================================
+   苹果真毛玻璃升级 3.0 —— 明暗双主题真实 backdrop-filter 毛玻璃
+   （本块置于末尾，覆盖上方同名规则；保留原 hover / 动画 / 布局）
+   真毛玻璃三要素：① 背后有彩色内容可透 ② 半透明 + 强 blur
+                  ③ 1px 内高光描边（inset 0 1px 0 var(--glass-hi)）
+   ============================================================ */
+
+/* ---- 毛玻璃 token：亮色（默认 + 显式 light） ---- */
+:root,
+:root[data-theme="light"] {
+  --glass: rgba(255, 255, 255, 0.60);
+  --glass-strong: rgba(255, 255, 255, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-hi: rgba(255, 255, 255, 0.85);
+  --glass-blur: 30px;
+  --glass-shadow: 0 14px 44px rgba(80, 70, 160, 0.16);
+  --wall-1: rgba(157, 139, 255, 0.55);
+  --wall-2: rgba(255, 155, 199, 0.45);
+  --wall-3: rgba(127, 192, 255, 0.45);
+}
+
+/* ---- 毛玻璃 token：暗色（显式 dark） ---- */
+:root[data-theme="dark"] {
+  --glass: rgba(30, 28, 46, 0.55);
+  --glass-strong: rgba(42, 40, 64, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-hi: rgba(255, 255, 255, 0.16);
+  --glass-blur: 32px;
+  --glass-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --wall-1: rgba(124, 92, 255, 0.55);
+  --wall-2: rgba(255, 92, 168, 0.45);
+  --wall-3: rgba(58, 160, 255, 0.45);
+}
+
+/* ---- 毛玻璃 token：暗色（跟随系统，未显式指定 light 时） ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --glass: rgba(30, 28, 46, 0.55);
+    --glass-strong: rgba(42, 40, 64, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-hi: rgba(255, 255, 255, 0.16);
+    --glass-blur: 32px;
+    --glass-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    --wall-1: rgba(124, 92, 255, 0.55);
+    --wall-2: rgba(255, 92, 168, 0.45);
+    --wall-3: rgba(58, 160, 255, 0.45);
+  }
+}
+
+/* ---- 全局壁纸：三色光斑，毛玻璃才有内容可透（Vibrancy 灵魂） ---- */
+body {
+  background:
+    radial-gradient(900px 620px at 102% -12%, var(--wall-1), transparent 55%),
+    radial-gradient(720px 520px at -8% 108%, var(--wall-2), transparent 55%),
+    radial-gradient(640px 540px at 86% 116%, var(--wall-3), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- 顶栏：真毛玻璃 + 内高光描边 ---- */
+.topbar {
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+}
+
+/* ---- 侧栏：更强毛玻璃（稍大 blur） ---- */
+.sidebar {
+  background: var(--glass);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: inset -1px 0 0 var(--glass-hi), var(--glass-shadow);
+}
+
+/* ---- 底部 Tab：真毛玻璃 ---- */
+.bottomtabs {
+  background: var(--glass);
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+  border-top: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+}
+
+/* ---- 卡片 / 统计 / 日详情区块：真毛玻璃 + 内高光 ---- */
+.card,
+.stat,
+.dd-sec {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow-md);
+}
+.card:not(.section):hover {
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow-lg);
+  border-color: var(--glass-border);
+}
+
+/* ---- 模态框：磨砂遮罩 + 毛玻璃面板 ---- */
+.modal-overlay {
+  background: rgba(15, 17, 23, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.modal {
+  background: var(--glass-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-top: 3px solid var(--primary);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow-lg);
+}
+
+/* ---- 日详情：轻微毛玻璃罩（保留可读性） ---- */
+.day-detail {
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* ---- 平台切换（设置页）：玻璃质感统一 ---- */
+.platform-switch {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+}
+
+/* ---- 尊重“减少动态效果”偏好：关闭模糊动画抖动（blur 本身保留） ---- */
+@media (prefers-reduced-motion: reduce) {
+  .page, .page > *, .list > *, .day-detail, .modal {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
