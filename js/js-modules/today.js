@@ -102,7 +102,7 @@
           <div class="stat"><div class="stat-num">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
           <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}">${overdue.length}</div><div class="stat-label">已逾期</div></div>
           <div class="stat"><div class="stat-num">${(income - expense).toFixed(2)}</div><div class="stat-label">本月结余</div></div>
-          <div class="stat"><div class="stat-num">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
+          <div class="stat"><div class="stat-num" id="stat-habit">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
         </div>
 
         <section class="card section">
@@ -154,9 +154,11 @@
       const id = card.dataset.id;
       if (card.classList.contains('addsub')) { openSubForm(card.dataset.parent); return; }
       if (e.target.classList.contains('chk')) {
-        const t = await store.get('tasks', id); t.done = e.target.checked; await store.put('tasks', t); WB.app.reload(); return;
+        const t = await store.get('tasks', id); t.done = e.target.checked; await store.put('tasks', t);
+        card.classList.toggle('done', t.done); // 局部更新，避免整页 reload 闪烁（M1）
+        return;
       }
-      if (e.target.classList.contains('del')) {
+      if (e.target.closest('.icon-btn.del')) {
         if (await ui.confirm(card.classList.contains('sub') ? '删除该子任务？' : '删除该待办及其子任务？')) {
           await store.remove('tasks', id);
           if (!card.classList.contains('sub')) {
@@ -166,7 +168,7 @@
         }
         return;
       }
-      if (!card.classList.contains('sub') && (e.target.classList.contains('edit') || e.target.closest('.task-main'))) {
+      if (!card.classList.contains('sub') && (e.target.closest('.icon-btn.edit') || e.target.closest('.task-main'))) {
         openTaskForm(await store.get('tasks', id));
       }
     });
@@ -177,8 +179,13 @@
       const btn = e.target.closest('.habit-check'); if (!btn) return;
       const id = btn.dataset.id; const key = id + ':' + todayKey;
       const ex = logMap[key]; const done = !(ex && ex.done);
-      await store.put('habitlogs', { id: key, habitId: id, date: todayKey, done, updatedAt: Date.now() });
-      WB.app.reload();
+      const rec = { id: key, habitId: id, date: todayKey, done, updatedAt: Date.now() };
+      await store.put('habitlogs', rec);
+      logMap[key] = rec;
+      btn.classList.toggle('on', done);
+      const habitDone = habits.filter(hh => { const m = logFor(hh.id); return m[todayKey] && m[todayKey].done; }).length;
+      const se = root.querySelector('#stat-habit'); if (se) se.textContent = habitDone + '/' + habits.length;
+      return;
     });
 
     // 笔记/书签跳转
