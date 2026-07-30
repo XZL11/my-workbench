@@ -656,8 +656,8 @@ input.chk:hover { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(79, 7
 /* ---- 毛玻璃 token：亮色（默认 + 显式 light） ---- */
 :root,
 :root[data-theme="light"] {
-  --glass: rgba(255, 255, 255, 0.60);
-  --glass-strong: rgba(255, 255, 255, 0.74);
+  --glass: rgba(255, 255, 255, 0.45);
+  --glass-strong: rgba(255, 255, 255, 0.58);
   --glass-border: rgba(255, 255, 255, 0.65);
   --glass-hi: rgba(255, 255, 255, 0.85);
   --glass-blur: 30px;
@@ -669,8 +669,8 @@ input.chk:hover { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(79, 7
 
 /* ---- 毛玻璃 token：暗色（显式 dark） ---- */
 :root[data-theme="dark"] {
-  --glass: rgba(30, 28, 46, 0.55);
-  --glass-strong: rgba(42, 40, 64, 0.72);
+  --glass: rgba(30, 28, 46, 0.42);
+  --glass-strong: rgba(42, 40, 64, 0.58);
   --glass-border: rgba(255, 255, 255, 0.10);
   --glass-hi: rgba(255, 255, 255, 0.16);
   --glass-blur: 32px;
