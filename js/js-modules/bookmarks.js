@@ -80,5 +80,5 @@
     });
   }
 
-  WB.modules.push({ id: 'bookmarks', title: '书签', icon: '🔖', render });
+  WB.modules.push({ id: 'bookmarks', title: '书签', icon: 'bookmark', render });
 })(window.WB = window.WB || {});
