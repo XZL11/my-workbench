@@ -19,7 +19,7 @@
           <label style="flex:1">分类<select id="f-cat" class="input">${CATS.map(c => `<option ${f.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
           <label style="flex:1">日期<input id="f-date" class="input" type="date" value="${f.date || ui.fmtDate(Date.now())}"></label>
         </div>
-        <label class="checkline"><input type="checkbox" id="f-fixed" ${f.fixed ? 'checked' : ''}> 设为固定生活成本（每月重复）</label>
+        <label class="checkline"><input type="checkbox" id="f-fixed" ${f.fixed ? 'checked' : ''}> 标记为固定成本（计入「固定月成本」统计）</label>
         <label>备注<input id="f-note" class="input" value="${ui.escapeHtml(f.note || '')}"></label>
       </div>`;
   }
@@ -148,8 +148,8 @@
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.classList.contains('edit')) { openForm(await store.get('finance', id)); return; }
-      if (e.target.classList.contains('del')) { if (await ui.confirm('删除该记录？')) { await store.remove('finance', id); WB.app.reload(); } }
+      if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('finance', id)); return; }
+      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该记录？')) { await store.remove('finance', id); WB.app.reload(); } }
     });
   }
 
