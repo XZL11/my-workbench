@@ -66,9 +66,39 @@
       if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) { ui.toast('仓库格式应为 owner/name', 'warn'); return; }
       const finalToken = token || cfg.token;
       if (!finalToken) { ui.toast('请填写 Token', 'warn'); return; }
+
+      // 先验证 Token 能访问该仓库，避免同步时才报 401
+      stat.textContent = '验证中…';
+      try {
+        const r = await fetch('https://api.github.com/repos/' + repo, {
+          headers: { Authorization: 'Bearer ' + finalToken, Accept: 'application/vnd.github+json' }
+        });
+        if (r.status === 401) throw new Error('Token 无效或已过期，请重新输入');
+        if (r.status === 404) throw new Error('找不到仓库 ' + repo + '，请检查名称或 Token 是否有 repo 权限');
+        if (!r.ok) throw new Error('验证失败 ' + r.status);
+      } catch (e) {
+        stat.textContent = '验证失败：' + e.message;
+        ui.toast('配置验证失败：' + e.message, 'error');
+        return;
+      }
+
       await sync.setConfig(finalToken, repo, branch);
       stat.textContent = '已配置 · ' + repo;
       ui.toast('配置已保存', 'success');
+
+      // 保存后若联网，立即尝试同步一次，把现有数据推上去
+      if (navigator.onLine) {
+        stat.textContent = '首次同步中…';
+        try {
+          await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
+          const now = await store.getMeta('last_sync_at', null);
+          stat.textContent = '已配置 · 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
+          ui.toast('同步完成', 'success');
+        } catch (e) {
+          stat.textContent = '同步失败：' + e.message;
+          ui.toast('同步失败：' + e.message, 'error');
+        }
+      }
     };
 
     root.querySelector('#clear-cfg').onclick = async () => {
