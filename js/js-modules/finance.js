@@ -32,6 +32,45 @@
     const expense = monthItems.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
     const fixedSum = all.filter(i => i.fixed && i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
 
+    // 图表：本月支出分类
+    const catMap = {};
+    monthItems.filter(i => i.type === 'expense').forEach(i => {
+      const c = i.category || '其他';
+      catMap[c] = (catMap[c] || 0) + (+i.amount || 0);
+    });
+    const catRows = Object.keys(catMap).map(c => ({ label: c, value: catMap[c] })).sort((a, b) => b.value - a.value);
+    const catMax = Math.max.apply(null, catRows.map(r => r.value).concat([1]));
+    const catBars = catRows.length ? catRows.map(r => `
+      <div class="bar-row">
+        <span class="bar-label">${ui.escapeHtml(r.label)}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${(r.value / catMax * 100).toFixed(1)}%"></div></div>
+        <span class="bar-val">${r.value.toFixed(2)}</span>
+      </div>`).join('') : ui.emptyState('本月暂无支出');
+
+    // 图表：近 6 个月收支趋势
+    const trend = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const items = all.filter(x => (x.date || '').slice(0, 7) === ym);
+      const inc = items.filter(x => x.type === 'income').reduce((s, x) => s + (+x.amount || 0), 0);
+      const exp = items.filter(x => x.type === 'expense').reduce((s, x) => s + (+x.amount || 0), 0);
+      trend.push({ label: (d.getMonth() + 1) + '月', income: inc, expense: exp });
+    }
+    const tMax = Math.max.apply(null, trend.flatMap(t => [t.income, t.expense]).concat([1]));
+    const trendHTML = `
+      <div class="trend">
+        ${trend.map(t => `
+          <div class="trend-col">
+            <div class="trend-bars">
+              <div class="trend-bar inc" title="收入 ${t.income.toFixed(2)}" style="height:${(t.income / tMax * 100).toFixed(1)}%"></div>
+              <div class="trend-bar exp" title="支出 ${t.expense.toFixed(2)}" style="height:${(t.expense / tMax * 100).toFixed(1)}%"></div>
+            </div>
+            <div class="trend-label">${t.label}</div>
+          </div>`).join('')}
+      </div>
+      <div class="trend-legend"><span class="lg inc">收入</span><span class="lg exp">支出</span></div>`;
+
     root.innerHTML = `
       <div class="page">
         <div class="page-head">
@@ -44,6 +83,14 @@
           <div class="stat"><div class="stat-num ${income - expense < 0 ? 'neg' : ''}">${(income - expense).toFixed(2)}</div><div class="stat-label">结余</div></div>
           <div class="stat"><div class="stat-num">${fixedSum.toFixed(2)}</div><div class="stat-label">固定月成本</div></div>
         </div>
+        <section class="card section">
+          <h2>📊 本月支出分类</h2>
+          <div class="bars">${catBars}</div>
+        </section>
+        <section class="card section">
+          <h2>📈 近 6 个月收支趋势</h2>
+          ${trendHTML}
+        </section>
         <div class="filters" id="filters">
           <button class="chip active" data-f="all">全部</button>
           <button class="chip" data-f="expense">支出</button>
