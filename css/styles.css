@@ -248,6 +248,36 @@ button { font-family: inherit; cursor: pointer; }
   .menu-toggle { display: none; }
 }
 
+/* ===== 日程日详情（动画滑入） ===== */
+.day-detail {
+  position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0;
+  background: var(--bg); z-index: 35; padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  overflow-y: auto; transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.22,.61,.36,1); overscroll-behavior: contain;
+}
+.day-detail.open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.18); }
+.dd-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.dd-back { font-size: 24px; line-height: 1; padding: 2px 8px; }
+.dd-date { font-weight: 700; font-size: 18px; }
+.dd-sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.dd-sec:last-child { margin-bottom: 0; }
+.dd-sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.dd-sec-head h2 { margin: 0; }
+.dd-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.dd-item:last-child { border-bottom: 0; }
+.dd-item.todo.done .dd-title { text-decoration: line-through; color: var(--muted); }
+.dd-time { width: 46px; flex: 0 0 auto; text-align: center; font-weight: 700; color: var(--primary);
+  font-variant-numeric: tabular-nums; font-size: 13px; padding-top: 2px; }
+.dd-item.todo .dd-time, .dd-item.fin .dd-time { color: var(--muted); }
+.dd-body { flex: 1; min-width: 0; }
+.dd-title { font-weight: 600; }
+.dd-note { font-size: 13px; color: var(--muted); margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+.dd-item.ev { cursor: pointer; }
+.dd-edit { flex: 0 0 auto; }
+.dd-item .chk { margin-top: 3px; width: 18px; height: 18px; flex: 0 0 auto; }
+.dd-item.habit .habit-check { width: 44px; height: 44px; }
+
 /* ===== 笔记搜索高亮 ===== */
 .note-title mark, .note-prev mark {
   background: #fff3a3; color: inherit; border-radius: 3px; padding: 0 1px; font-weight: 600;
