@@ -153,5 +153,5 @@
     });
   }
 
-  WB.modules.push({ id: 'finance', title: '记账', icon: '💰', render });
+  WB.modules.push({ id: 'finance', title: '记账', icon: 'wallet', render });
 })(window.WB = window.WB || {});
