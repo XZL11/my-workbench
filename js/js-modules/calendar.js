@@ -229,5 +229,5 @@
     });
   }
 
-  WB.modules.push({ id: 'calendar', title: '日程', icon: '📅', render });
+  WB.modules.push({ id: 'calendar', title: '日程', icon: 'calendar', render });
 })(window.WB = window.WB || {});
