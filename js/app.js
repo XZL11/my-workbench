@@ -43,6 +43,13 @@
     catch (e) { ui.toast('自动同步部分失败：' + e.message, 'warn'); }
   }
 
+  // 数据写入后防抖自动同步（2.5s），避免每次编辑都打一次网络请求
+  let syncTimer = null;
+  function scheduleSync() {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => { autoSync(); }, 2500);
+  }
+
   function openDrawer() { appEl.classList.add('drawer-open'); }
   function closeDrawer() { appEl.classList.remove('drawer-open'); }
 
@@ -83,12 +90,15 @@
 
     await route();
 
+    // 启动后若已配置且联网，立即同步一次（拉取云端 + 推送本地）
+    if (sync.isConfigured() && navigator.onLine) autoSync();
+
     // 注册 Service Worker（PWA 离线）
     if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
   }
 
-  WB.app = { init, reload, route };
+  WB.app = { init, reload, route, scheduleSync };
   document.addEventListener('DOMContentLoaded', init);
 })(window.WB = window.WB || {});
