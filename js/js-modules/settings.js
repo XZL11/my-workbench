@@ -3,29 +3,46 @@
   'use strict';
   const store = WB.store, ui = WB.ui, sync = WB.sync;
 
+  const PLATFORM_HELP = {
+    github: '在 GitHub 生成一个具有 <b>repo</b> 权限的 Personal Access Token（ghp_...），并准备一个<strong>私有仓库</strong>。Token 仅保存在本机浏览器。',
+    gitee: '在 Gitee（码云）生成一个<strong>私人令牌</strong>（设置 → 私人令牌，勾选 projects 权限），并准备一个<strong>私有仓库</strong>。国内访问更快、无需代理。Token 仅保存在本机。'
+  };
+
+  function branchDefault(pf) { return pf === 'gitee' ? 'master' : 'main'; }
+  function tokenPlaceholder(pf, has) {
+    if (has) return '已保存，留空则不修改';
+    return pf === 'gitee' ? 'Gitee 私人令牌' : 'ghp_...';
+  }
+
   async function render(root) {
     const cfg = sync.cfg;
     const last = await store.getMeta('last_sync_at', null);
     const configured = sync.isConfigured();
+    let selPlatform = cfg.platform || 'github';
 
     root.innerHTML = `
       <div class="page">
         <div class="page-head"><h1>⚙️ 设置</h1></div>
 
         <section class="card section">
-          <h2>数据同步（GitHub）</h2>
-          <p class="muted">在 GitHub 生成一个具有 <b>repo</b> 权限的 Personal Access Token，并准备一个<strong>私有仓库</strong>存放数据。Token 仅保存在本机浏览器。</p>
+          <h2>数据同步</h2>
+          <p class="muted">选择同步平台，凭证各自独立保存，可随时切换。</p>
+          <div class="platform-switch" id="pf-switch">
+            <button type="button" class="pf-btn" data-pf="github">GitHub</button>
+            <button type="button" class="pf-btn" data-pf="gitee">Gitee</button>
+          </div>
+          <p class="muted" id="pf-help">${PLATFORM_HELP[selPlatform]}</p>
           <div class="form">
-            <label>仓库（owner/name）<input id="s-repo" class="input" value="${ui.escapeHtml(cfg.repo || '')}" placeholder="yourname/my-workbench-data"></label>
-            <label>Personal Access Token<input id="s-token" class="input" type="password" placeholder="${configured ? '已保存，留空则不修改' : 'ghp_...'}"></label>
-            <label>分支<input id="s-branch" class="input" value="${ui.escapeHtml(cfg.branch || 'main')}"></label>
+            <label>仓库（owner/name）<input id="s-repo" class="input" placeholder="yourname/my-workbench-data"></label>
+            <label>访问令牌<input id="s-token" class="input" type="password" placeholder="${tokenPlaceholder(selPlatform, configured)}"></label>
+            <label>分支<input id="s-branch" class="input" value="${branchDefault(selPlatform)}"></label>
           </div>
           <div class="row-actions">
             <button class="btn primary" id="save-cfg">保存配置</button>
             <button class="btn ghost" id="sync-now">立即同步</button>
             <button class="btn ghost danger" id="clear-cfg">清除凭证</button>
           </div>
-          <div class="sync-stat" id="sync-stat">${configured ? '已配置 · 上次同步：' + (last ? ui.fmtDateTime(last) : '从未') : '未配置'}</div>
+          <div class="sync-stat" id="sync-stat">${configured ? '已配置（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）· 上次同步：' + (last ? ui.fmtDateTime(last) : '从未') : '未配置'}</div>
         </section>
 
         <section class="card section">
@@ -49,41 +66,64 @@
 
         <section class="card section">
           <h2>关于</h2>
-          <p class="muted">个人工作台 · 纯静态 PWA · 离线优先 · 数据存于本地与私有仓库。<br>所有数据默认仅存在于你的设备与你的 GitHub 私有仓库。</p>
+          <p class="muted">个人工作台 · 纯静态 PWA · 离线优先 · 数据存于本地与私有仓库。<br>所有数据默认仅存在于你的设备与你的私有仓库（GitHub 或 Gitee）。</p>
         </section>
       </div>`;
 
     const stat = root.querySelector('#sync-stat');
+    const pfHelp = root.querySelector('#pf-help');
+    const repoInput = root.querySelector('#s-repo');
+    const tokenInput = root.querySelector('#s-token');
+    const branchInput = root.querySelector('#s-branch');
+    const pfSwitch = root.querySelector('#pf-switch');
+
+    async function applyPlatform(pf, focus) {
+      selPlatform = pf;
+      pfSwitch.querySelectorAll('.pf-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.pf === pf);
+      });
+      pfHelp.innerHTML = PLATFORM_HELP[pf];
+      const savedRepo = await store.getMeta(pf + '_repo', '');
+      const savedBranch = await store.getMeta(pf + '_branch', null) || branchDefault(pf);
+      repoInput.value = savedRepo || '';
+      branchInput.value = savedBranch;
+      tokenInput.value = '';
+      tokenInput.placeholder = tokenPlaceholder(pf, !!savedRepo);
+      repoInput.placeholder = 'yourname/my-workbench-data';
+      if (focus) tokenInput.focus();
+    }
+    pfSwitch.querySelectorAll('.pf-btn').forEach(b => {
+      b.addEventListener('click', () => applyPlatform(b.dataset.pf, true));
+    });
+    // 初始化为当前已配置平台
+    await applyPlatform(selPlatform, false);
+
     root.querySelector('#s-theme').value = await store.getMeta('theme', 'auto');
     root.querySelector('#s-theme').addEventListener('change', async e => {
       await ui.setTheme(e.target.value); ui.toast('主题已更新');
     });
 
     root.querySelector('#save-cfg').onclick = async () => {
-      const repo = root.querySelector('#s-repo').value.trim();
-      const token = root.querySelector('#s-token').value.trim();
-      const branch = root.querySelector('#s-branch').value.trim() || 'main';
+      const repo = repoInput.value.trim();
+      const token = tokenInput.value.trim();
+      const branch = branchInput.value.trim() || branchDefault(selPlatform);
       if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) { ui.toast('仓库格式应为 owner/name', 'warn'); return; }
-      const finalToken = token || cfg.token;
-      if (!finalToken) { ui.toast('请填写 Token', 'warn'); return; }
+      const savedToken = await store.getMeta(selPlatform + '_token', null);
+      const finalToken = token || savedToken;
+      if (!finalToken) { ui.toast('请填写访问令牌', 'warn'); return; }
 
-      // 先验证 Token 能访问该仓库，避免同步时才报 401
+      // 先验证 Token 能访问该仓库（按所选平台校验），避免同步时才报 401
       stat.textContent = '验证中…';
       try {
-        const r = await fetch('https://api.github.com/repos/' + repo, {
-          headers: { Authorization: 'Bearer ' + finalToken, Accept: 'application/vnd.github+json' }
-        });
-        if (r.status === 401) throw new Error('Token 无效或已过期，请重新输入');
-        if (r.status === 404) throw new Error('找不到仓库 ' + repo + '，请检查名称或 Token 是否有 repo 权限');
-        if (!r.ok) throw new Error('验证失败 ' + r.status);
+        await sync.validateToken(selPlatform, finalToken, repo);
       } catch (e) {
         stat.textContent = '验证失败：' + e.message;
         ui.toast('配置验证失败：' + e.message, 'error');
         return;
       }
 
-      await sync.setConfig(finalToken, repo, branch);
-      stat.textContent = '已配置 · ' + repo;
+      await sync.setConfig(selPlatform, finalToken, repo, branch);
+      stat.textContent = '已配置（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）· ' + repo;
       ui.toast('配置已保存', 'success');
 
       // 保存后若联网，立即尝试同步一次，把现有数据推上去
@@ -92,7 +132,7 @@
         try {
           await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
           const now = await store.getMeta('last_sync_at', null);
-          stat.textContent = '已配置 · 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
+          stat.textContent = '已配置（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）· 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
           ui.toast('同步完成', 'success');
         } catch (e) {
           stat.textContent = '同步失败：' + e.message;
@@ -102,8 +142,10 @@
     };
 
     root.querySelector('#clear-cfg').onclick = async () => {
-      if (await ui.confirm('确定清除本地保存的 Token 与仓库信息？')) {
-        await sync.clearConfig(); stat.textContent = '未配置'; ui.toast('已清除凭证');
+      if (await ui.confirm('确定清除当前平台（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）保存的令牌与仓库信息？')) {
+        await sync.clearConfig();
+        repoInput.value = ''; branchInput.value = branchDefault(selPlatform); tokenInput.value = '';
+        stat.textContent = '未配置'; ui.toast('已清除凭证');
       }
     };
 
@@ -113,7 +155,7 @@
       try {
         await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
         const now = await store.getMeta('last_sync_at', null);
-        stat.textContent = '已配置 · 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
+        stat.textContent = '已配置（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）· 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
         ui.toast('同步完成', 'success');
       } catch (e) {
         stat.textContent = '同步失败';
