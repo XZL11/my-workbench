@@ -92,5 +92,5 @@
     });
   }
 
-  WB.modules.push({ id: 'planning', title: '规划', icon: '🎯', render });
+  WB.modules.push({ id: 'planning', title: '规划', icon: 'target', render });
 })(window.WB = window.WB || {});
