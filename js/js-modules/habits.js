@@ -94,14 +94,16 @@
       const key = id + ':' + todayKey;
       const existing = logMap[key];
       const done = !(existing && existing.done);
-      await store.put('habitlogs', { id: key, habitId: id, date: todayKey, done, updatedAt: Date.now() });
-      WB.app.reload();
+      const rec = { id: key, habitId: id, date: todayKey, done, updatedAt: Date.now() };
+      await store.put('habitlogs', rec);
+      logMap[key] = rec; // 更新内存映射后局部重绘，避免整页 reload 闪烁
+      paint();
     }
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.classList.contains('habit-check')) { await toggle(id); return; }
-      if (e.target.classList.contains('edit')) {
+      if (e.target.closest('.icon-btn.edit')) {
         const h = await store.get('habits', id);
         const m = ui.openModal({
           title: '编辑习惯', html: formHTML(h),
@@ -115,10 +117,11 @@
         });
         return;
       }
-      if (e.target.classList.contains('del')) {
+      if (e.target.closest('.icon-btn.del')) {
         if (await ui.confirm('删除该习惯？相关打卡记录也会删除。')) {
           await store.remove('habits', id);
-          Object.keys(logMap).forEach(k => { if (k.startsWith(id + ':')) store.remove('habitlogs', k); });
+          const keys = Object.keys(logMap).filter(k => k.startsWith(id + ':'));
+          await Promise.all(keys.map(k => store.remove('habitlogs', k)));
           WB.app.reload();
         }
       }
