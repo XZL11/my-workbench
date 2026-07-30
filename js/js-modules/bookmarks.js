@@ -75,8 +75,8 @@
       if (e.target.closest('a')) return; // 链接本身打开
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.classList.contains('edit')) { openForm(await store.get('bookmarks', id)); return; }
-      if (e.target.classList.contains('del')) { if (await ui.confirm('删除该书签？')) { await store.remove('bookmarks', id); WB.app.reload(); } }
+      if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('bookmarks', id)); return; }
+      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该书签？')) { await store.remove('bookmarks', id); WB.app.reload(); } }
     });
   }
 
