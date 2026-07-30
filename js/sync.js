@@ -142,12 +142,17 @@
 
   function mergeArrays(local, remote) {
     const map = new Map();
-    (local || []).forEach(i => { if (i && i.id) map.set(i.id, i); });
-    (remote || []).forEach(i => {
+    const put = (i) => {
       if (!i || !i.id) return;
       const ex = map.get(i.id);
-      if (!ex || (i.updatedAt || 0) > (ex.updatedAt || 0)) map.set(i.id, i);
-    });
+      if (!ex) { map.set(i.id, i); return; }
+      // 墓碑权威性：删除态且更新时间更新（或对方非删除）则保持删除，避免已删项被"复活"（CODE-REVIEW M3）
+      if (i._deleted && (!ex._deleted || (i.updatedAt || 0) >= (ex.updatedAt || 0))) { map.set(i.id, i); return; }
+      if (ex._deleted && (!i._deleted || (ex.updatedAt || 0) >= (i.updatedAt || 0))) { return; }
+      if ((i.updatedAt || 0) > (ex.updatedAt || 0)) map.set(i.id, i);
+    };
+    (local || []).forEach(put);
+    (remote || []).forEach(put);
     return Array.from(map.values());
   }
 
@@ -164,25 +169,30 @@
     return merged.length;
   }
 
+  let _syncPromise = null;
   async function syncAll(onProgress) {
-    const results = {};
-    const errors = [];
-    store.setSuppressSync(true); // 同步内部的写操作不要再次触发自动同步
-    try {
-      for (const name of store.SYNC_STORES) {
-        try {
-          if (onProgress) onProgress('同步 ' + name + ' …');
-          results[name] = await syncModule(name);
-        } catch (e) {
-          errors.push(name + '：' + e.message);
+    if (_syncPromise) return _syncPromise; // 并发合并：进行中则复用同一轮，避免多次同步互相覆盖（CODE-REVIEW H4）
+    _syncPromise = (async () => {
+      const results = {};
+      const errors = [];
+      store.setSuppressSync(true); // 同步内部的写操作不要再次触发自动同步
+      try {
+        for (const name of store.SYNC_STORES) {
+          try {
+            if (onProgress) onProgress('同步 ' + name + ' …');
+            results[name] = await syncModule(name);
+          } catch (e) {
+            errors.push(name + '：' + e.message);
+          }
         }
+        await store.setMeta('last_sync_at', Date.now());
+      } finally {
+        store.setSuppressSync(false);
       }
-      await store.setMeta('last_sync_at', Date.now());
-    } finally {
-      store.setSuppressSync(false);
-    }
-    if (errors.length) throw new Error('部分模块同步失败 — ' + errors.join('；'));
-    return results;
+      if (errors.length) throw new Error('部分模块同步失败 — ' + errors.join('；'));
+      return results;
+    })();
+    try { return await _syncPromise; } finally { _syncPromise = null; }
   }
 
   async function exportAll() {
