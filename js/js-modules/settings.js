@@ -10,7 +10,7 @@
 
   function branchDefault(pf) { return pf === 'gitee' ? 'master' : 'main'; }
   function tokenPlaceholder(pf, has) {
-    if (has) return '已保存，留空则不修改';
+    if (has) return '已保存，留空则使用已保存令牌';
     return pf === 'gitee' ? 'Gitee 私人令牌' : 'ghp_...';
   }
 
