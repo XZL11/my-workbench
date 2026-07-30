@@ -139,5 +139,5 @@
     };
   }
 
-  WB.modules.push({ id: 'habits', title: '习惯', icon: '🔥', render });
+  WB.modules.push({ id: 'habits', title: '习惯', icon: 'flame', render });
 })(window.WB = window.WB || {});
