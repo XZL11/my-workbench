@@ -1,25 +1,52 @@
-// sync.js - 基于 GitHub Contents API 的双向同步引擎
+// sync.js - 基于 GitHub / Gitee Contents API 的双向同步引擎
 (function (WB) {
   'use strict';
   const store = WB.store;
-  let cfg = { token: null, repo: null, branch: 'main' };
+
+  // 平台配置：base=API 基地址, accept=Accept 头, auth=鉴权头, branchDefault=默认分支, createMethod=新建文件用的 HTTP 方法
+  const PLATFORMS = {
+    github: {
+      label: 'GitHub',
+      base: 'https://api.github.com',
+      accept: 'application/vnd.github+json',
+      auth: t => 'Bearer ' + t,
+      branchDefault: 'main',
+      createMethod: 'PUT'
+    },
+    gitee: {
+      label: 'Gitee',
+      base: 'https://gitee.com/api/v5',
+      accept: 'application/json',
+      auth: t => 'token ' + t,
+      branchDefault: 'master',
+      createMethod: 'POST'
+    }
+  };
+
+  let cfg = { platform: 'github', token: null, repo: null, branch: 'main' };
 
   async function loadCfg() {
-    cfg.token = await store.getMeta('gh_token', null);
-    cfg.repo = await store.getMeta('gh_repo', null);
-    cfg.branch = await store.getMeta('gh_branch', 'main');
+    let p = await store.getMeta('sync_platform', 'github');
+    if (!PLATFORMS[p]) p = 'github';
+    cfg.platform = p;
+    cfg.token = await store.getMeta(p + '_token', null);
+    cfg.repo = await store.getMeta(p + '_repo', null);
+    cfg.branch = await store.getMeta(p + '_branch', null) || PLATFORMS[p].branchDefault;
   }
   function isConfigured() { return !!(cfg.token && cfg.repo); }
-  async function setConfig(token, repo, branch) {
-    cfg.token = token; cfg.repo = repo; cfg.branch = branch || 'main';
-    await store.setMeta('gh_token', token);
-    await store.setMeta('gh_repo', repo);
-    await store.setMeta('gh_branch', cfg.branch);
+  async function setConfig(platform, token, repo, branch) {
+    cfg.platform = platform;
+    cfg.token = token; cfg.repo = repo; cfg.branch = branch || PLATFORMS[platform].branchDefault;
+    await store.setMeta('sync_platform', platform);
+    await store.setMeta(platform + '_token', token);
+    await store.setMeta(platform + '_repo', repo);
+    await store.setMeta(platform + '_branch', cfg.branch);
   }
   async function clearConfig() {
+    const p = cfg.platform;
+    await store.setMeta(p + '_token', null);
+    await store.setMeta(p + '_repo', null);
     cfg.token = null; cfg.repo = null;
-    await store.setMeta('gh_token', null);
-    await store.setMeta('gh_repo', null);
   }
 
   function b64encode(str) {
@@ -36,11 +63,24 @@
 
   function api(path, opts) {
     opts = opts || {};
+    const p = PLATFORMS[cfg.platform] || PLATFORMS.github;
     const headers = Object.assign({
-      Authorization: 'Bearer ' + cfg.token,
-      Accept: 'application/vnd.github+json'
+      Authorization: p.auth(cfg.token),
+      Accept: p.accept
     }, opts.headers || {});
-    return fetch('https://api.github.com' + path, Object.assign({ headers }, opts));
+    return fetch(p.base + path, Object.assign({ headers }, opts));
+  }
+
+  // 保存前校验 Token 能否访问该仓库，避免同步时才报 401
+  async function validateToken(platform, token, repo) {
+    const p = PLATFORMS[platform] || PLATFORMS.github;
+    const r = await fetch(p.base + '/repos/' + repo, {
+      headers: { Authorization: p.auth(token), Accept: p.accept }
+    });
+    if (r.status === 401) throw new Error('Token 无效或已过期，请重新输入');
+    if (r.status === 404) throw new Error('找不到仓库 ' + repo + '，请检查名称或 Token 权限');
+    if (!r.ok) throw new Error('验证失败 ' + r.status);
+    return true;
   }
 
   // 返回 { sha, items } 或 null(404)
@@ -49,7 +89,8 @@
     if (res.status === 404) return null;
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
-      throw new Error('GitHub ' + res.status + '：' + (e.message || res.statusText));
+      const label = (PLATFORMS[cfg.platform] || PLATFORMS.github).label;
+      throw new Error(label + ' ' + res.status + '：' + (e.message || res.statusText));
     }
     const data = await res.json();
     const content = data.content ? b64decode(data.content) : '[]';
@@ -59,14 +100,17 @@
   }
 
   async function putFile(path, items, sha) {
+    const p = PLATFORMS[cfg.platform] || PLATFORMS.github;
     const body = {
       message: 'workbench sync: ' + path + ' @ ' + new Date().toISOString(),
       content: b64encode(JSON.stringify(items, null, 2)),
       branch: cfg.branch
     };
     if (sha) body.sha = sha;
+    // GitHub 用 PUT 同时支持新建/更新；Gitee 新建用 POST，更新用 PUT
+    const method = sha ? 'PUT' : p.createMethod;
     const res = await api('/repos/' + cfg.repo + '/contents/' + path, {
-      method: 'PUT',
+      method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -137,7 +181,7 @@
   }
 
   WB.sync = {
-    loadCfg, isConfigured, setConfig, clearConfig,
+    loadCfg, isConfigured, setConfig, clearConfig, validateToken,
     syncAll, syncModule, exportAll, importAll,
     get cfg() { return cfg; },
     onOnline(handler) { window.addEventListener('online', handler); }
