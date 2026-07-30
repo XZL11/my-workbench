@@ -32,6 +32,21 @@
     cfg.token = await store.getMeta(p + '_token', null);
     cfg.repo = await store.getMeta(p + '_repo', null);
     cfg.branch = await store.getMeta(p + '_branch', null) || PLATFORMS[p].branchDefault;
+    // 兼容旧版键名 gh_token/gh_repo/gh_branch（仅 GitHub 平台）
+    if (p === 'github' && cfg.token == null) {
+      const oldToken = await store.getMeta('gh_token', null);
+      if (oldToken != null) {
+        cfg.token = oldToken;
+        cfg.repo = await store.getMeta('gh_repo', null);
+        cfg.branch = await store.getMeta('gh_branch', null) || PLATFORMS.github.branchDefault;
+        await store.setMeta('github_token', cfg.token);
+        await store.setMeta('github_repo', cfg.repo);
+        await store.setMeta('github_branch', cfg.branch);
+        await store.setMeta('gh_token', null);
+        await store.setMeta('gh_repo', null);
+        await store.setMeta('gh_branch', null);
+      }
+    }
   }
   function isConfigured() { return !!(cfg.token && cfg.repo); }
   async function setConfig(platform, token, repo, branch) {
