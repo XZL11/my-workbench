@@ -4,6 +4,25 @@
   const store = WB.store, ui = WB.ui;
   const TYPES = { note: '笔记', knowledge: '知识库', timeline: '时间轴', idea: '灵感' };
 
+  function escapeReg(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function highlight(text, q) {
+    const esc = ui.escapeHtml(text || '');
+    if (!q) return esc;
+    try {
+      const re = new RegExp('(' + escapeReg(q) + ')', 'gi');
+      return esc.replace(re, '<mark>$1</mark>');
+    } catch (e) { return esc; }
+  }
+  function snippet(body, q) {
+    const plain = (body || '').replace(/[#*`>\[\]()_~]/g, '');
+    if (!q) return plain.slice(0, 90);
+    const idx = plain.toLowerCase().indexOf(q.toLowerCase());
+    if (idx < 0) return plain.slice(0, 90);
+    const start = Math.max(0, idx - 30);
+    const end = Math.min(plain.length, idx + q.length + 60);
+    return (start > 0 ? '…' : '') + plain.slice(start, end) + (end < plain.length ? '…' : '');
+  }
+
   function formHTML(n) {
     n = n || {};
     return `
@@ -41,7 +60,8 @@
       </div>`;
     const list = root.querySelector('#list');
     function paint() {
-      const q = root.querySelector('#search').value.trim().toLowerCase();
+      const raw = root.querySelector('#search').value.trim();
+      const q = raw.toLowerCase();
       const tf = root.querySelector('#typefilter').value;
       let view = all;
       if (tf !== 'all') view = view.filter(i => i.type === tf);
@@ -50,13 +70,13 @@
       if (!view.length) { list.innerHTML = ui.emptyState('没有匹配的笔记'); return; }
       list.innerHTML = view.map(n => {
         const tags = (n.tags || []).map(x => `<span class="tag">${ui.escapeHtml(x)}</span>`).join('');
-        const prev = (n.body || '').replace(/[#*`>\[\]()]/g, '').slice(0, 80);
+        const prev = snippet(n.body, raw);
         return `
           <div class="card note" data-id="${n.id}">
             <div class="note-main">
-              <div class="note-title">${ui.escapeHtml(n.title || '无标题')}</div>
+              <div class="note-title">${highlight(n.title || '无标题', raw)}</div>
               <div class="note-meta"><span class="badge">${TYPES[n.type] || '笔记'}</span>${tags}<span class="muted">${ui.fmtRelative(n.updatedAt)}</span></div>
-              <div class="note-prev muted">${ui.escapeHtml(prev)}</div>
+              <div class="note-prev muted">${highlight(prev, raw)}</div>
             </div>
             <div class="row-actions">
               <button class="icon-btn edit" title="编辑">✏️</button>
