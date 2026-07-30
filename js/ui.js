@@ -44,9 +44,12 @@
     function close() { overlay.remove(); }
     (opts.actions || []).forEach(a => {
       const btn = document.createElement('button');
-      btn.className = 'btn ' + (a.primary ? 'primary' : 'ghost');
+      btn.className = 'btn ' + (a.primary ? 'primary' : (a.danger ? 'danger' : 'ghost'));
       btn.textContent = a.label;
-      btn.onclick = () => { if (a.onClick) a.onClick(close); };
+      btn.onclick = () => {
+        if (a.onClick) a.onClick(close);
+        else if (!a.primary) close(); // 非主按钮（如“取消”）未显式绑定时默认关闭弹窗
+      };
       foot.appendChild(btn);
     });
     setTimeout(() => overlay.classList.add('show'), 10);
