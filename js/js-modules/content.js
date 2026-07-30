@@ -102,7 +102,7 @@
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.classList.contains('del')) { if (await ui.confirm('删除该内容？')) { await store.remove('content', id); WB.app.reload(); } return; }
+      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该内容？')) { await store.remove('content', id); WB.app.reload(); } return; }
       openForm(await store.get('content', id));
     });
   }
