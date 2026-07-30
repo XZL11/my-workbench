@@ -11,13 +11,42 @@
 
     const dueToday = tasks.filter(t => !t.done && t.dueDate === todayKey);
     const overdue = tasks.filter(t => !t.done && t.dueDate && t.dueDate < todayKey);
-    const todo = overdue.concat(dueToday).sort((a, b) => (a.priority - b.priority) || (a.dueDate || '').localeCompare(b.dueDate || ''));
+    const openTasks = overdue.concat(dueToday).sort((a, b) => (a.priority - b.priority) || (a.dueDate || '').localeCompare(b.dueDate || ''));
     const evSorted = events.slice().sort((a, b) => (a.startTime || '23:59').localeCompare(b.startTime || '23:59'));
+
+    // 合并为单一时间线：无具体时间的待办在前（灵活），按时间排的日程在后
+    const items = [];
+    openTasks.forEach(t => items.push({ kind: 'task', ref: t }));
+    evSorted.forEach(e => items.push({ kind: 'event', ref: e }));
+    const total = items.length;
 
     const d = new Date();
     const dateStr = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + '日一二三四五六'[d.getDay()];
     const h = d.getHours();
     const greet = h < 11 ? '早上好' : h < 18 ? '下午好' : '晚上好';
+
+    const rowHTML = it => {
+      if (it.kind === 'task') {
+        const t = it.ref;
+        return `<div class="tl-item task ${t.done ? 'done' : ''}" data-id="${t.id}">
+          <div class="tl-time">待定</div>
+          <div class="tl-body">
+            <div class="tl-title">${ui.escapeHtml(t.title)}</div>
+            <div class="tl-meta"><span class="badge">✅ 待办</span><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span>${t.dueDate < todayKey ? '<span class="due over">逾期 ' + ui.escapeHtml(t.dueDate) + '</span>' : ''}</div>
+          </div>
+          <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
+        </div>`;
+      }
+      const e = it.ref;
+      return `<div class="tl-item event" data-go="calendar">
+        <div class="tl-time">${ui.escapeHtml(e.startTime || '全天')}</div>
+        <div class="tl-body">
+          <div class="tl-title">${ui.escapeHtml(e.title)}</div>
+          <div class="tl-meta"><span class="badge">📅 日程</span>${e.location ? '<span class="muted">📍 ' + ui.escapeHtml(e.location) + '</span>' : ''}</div>
+        </div>
+        <span class="tl-go">›</span>
+      </div>`;
+    };
 
     root.innerHTML = `
       <div class="page">
@@ -25,53 +54,30 @@
           <div><h1>📌 今日</h1><div class="muted" style="font-size:13px">${greet}，${dateStr}</div></div>
         </div>
         <div class="stat-row">
-          <div class="stat"><div class="stat-num">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
-          <div class="stat"><div class="stat-num">${evSorted.length}</div><div class="stat-label">今日日程</div></div>
+          <div class="stat"><div class="stat-num">${total}</div><div class="stat-label">今日事项</div></div>
+          <div class="stat"><div class="stat-num">${evSorted.length}</div><div class="stat-label">已排日程</div></div>
           <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}">${overdue.length}</div><div class="stat-label">已逾期</div></div>
         </div>
 
         <section class="card section">
-          <h2>⏰ 今日日程</h2>
-          ${evSorted.length ? evSorted.map(e => `
-            <div class="card ev" data-go="calendar">
-              <div class="ev-time">${ui.escapeHtml(e.startTime || '全天')}</div>
-              <div class="ev-main">
-                <div class="ev-title">${ui.escapeHtml(e.title)}</div>
-                ${e.location ? '<div class="muted">📍 ' + ui.escapeHtml(e.location) + '</div>' : ''}
-              </div>
-            </div>`).join('') : ui.emptyState('今天没有日程')}
-        </section>
-
-        <section class="card section">
-          <h2>✅ 今日待办 / 逾期</h2>
-          <div id="todolist">
-            ${todo.length ? todo.map(t => `
-              <div class="card task ${t.done ? 'done' : ''}" data-id="${t.id}">
-                <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
-                <div class="task-main">
-                  <div class="task-title">${ui.escapeHtml(t.title)}</div>
-                  <div class="task-meta">
-                    <span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span>
-                    ${t.dueDate < todayKey ? '<span class="due over">逾期 ' + ui.escapeHtml(t.dueDate) + '</span>'
-                      : (t.dueDate ? '<span class="due">' + ui.escapeHtml(t.dueDate) + '</span>' : '<span class="muted">无截止日</span>')}
-                  </div>
-                </div>
-              </div>`).join('') : ui.emptyState('今天没有待办，太棒了 🎉')}
+          <h2>🗓️ 今日时间线</h2>
+          <div id="timeline">
+            ${total ? items.map(rowHTML).join('') : ui.emptyState('今天没有安排，享受当下吧 🌿')}
           </div>
         </section>
       </div>`;
 
-    // 勾选完成
-    root.querySelector('#todolist').addEventListener('click', async e => {
-      const card = e.target.closest('.card'); if (!card) return;
-      const id = card.dataset.id;
-      if (e.target.classList.contains('chk')) {
-        const t = await store.get('tasks', id);
-        t.done = e.target.checked; await store.put('tasks', t); WB.app.reload();
+    root.querySelector('#timeline').addEventListener('click', async e => {
+      const item = e.target.closest('.tl-item'); if (!item) return;
+      if (item.dataset.id) {
+        if (e.target.classList.contains('chk')) {
+          const t = await store.get('tasks', item.dataset.id);
+          t.done = e.target.checked; await store.put('tasks', t); WB.app.reload();
+        }
+      } else if (item.dataset.go) {
+        location.hash = '#/' + item.dataset.go;
       }
     });
-    // 点击日程跳转到日程页
-    root.querySelectorAll('[data-go]').forEach(el => { el.onclick = () => { location.hash = '#/' + el.dataset.go; }; });
   }
 
   // 放到导航最前，作为首页
