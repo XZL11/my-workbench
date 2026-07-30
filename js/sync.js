@@ -37,7 +37,7 @@
   function api(path, opts) {
     opts = opts || {};
     const headers = Object.assign({
-      Authorization: 'token ' + cfg.token,
+      Authorization: 'Bearer ' + cfg.token,
       Accept: 'application/vnd.github+json'
     }, opts.headers || {});
     return fetch('https://api.github.com' + path, Object.assign({ headers }, opts));
