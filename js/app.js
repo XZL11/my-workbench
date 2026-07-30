@@ -81,7 +81,8 @@
       const curEff = cur || (sysDark ? 'dark' : 'light');
       const next = curEff === 'dark' ? 'light' : 'dark';
       await ui.setTheme(next);
-      document.getElementById('theme-toggle').innerHTML = ui.icon(next === 'dark' ? 'sun' : 'moon', 20);
+      // 图标统一表示"当前主题"：深色显示月亮、浅色显示太阳（与 init 保持一致，修复 H3 语义矛盾）
+      document.getElementById('theme-toggle').innerHTML = ui.icon(next === 'dark' ? 'moon' : 'sun', 20);
       ui.toast('已切换到' + (next === 'dark' ? '深色' : '浅色'));
     };
     document.getElementById('menu-toggle').onclick = openDrawer;
