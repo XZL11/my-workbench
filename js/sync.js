@@ -93,6 +93,7 @@
       headers: { Authorization: p.auth(token), Accept: p.accept }
     });
     if (r.status === 401) throw new Error('Token 无效或已过期，请重新输入');
+    if (r.status === 403) throw new Error('令牌无写权限：请在 Gitee 重新生成私人令牌并勾选 projects 权限');
     if (r.status === 404) throw new Error('找不到仓库 ' + repo + '，请检查名称或 Token 权限');
     if (!r.ok) throw new Error('验证失败 ' + r.status);
     return true;
@@ -131,7 +132,9 @@
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
-      throw new Error('提交失败 ' + res.status + '：' + (e.message || res.statusText));
+      let msg = e.message || res.statusText;
+      if (res.status === 403) msg = '令牌无写权限（请确认 Gitee 私人令牌勾选了 projects 权限）';
+      throw new Error('提交失败 ' + res.status + '：' + msg);
     }
     const data = await res.json();
     return data.content.sha;
