@@ -53,7 +53,7 @@
       foot.appendChild(btn);
     });
     setTimeout(() => overlay.classList.add('show'), 10);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay && opts.dismissable !== false) close(); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay && opts.dismissable !== false) { if (opts.onDismiss) opts.onDismiss(); close(); } });
     return { close, dialog };
   }
 
@@ -62,6 +62,7 @@
       openModal({
         title: '请确认',
         html: '<p>' + escapeHtml(msg) + '</p>',
+        onDismiss: () => resolve(false), // 点背景关闭也正确 resolve，避免 Promise 永久挂起（CODE-REVIEW H1）
         actions: [
           { label: '取消', onClick: (c) => { c(); resolve(false); } },
           { label: '确定', primary: true, onClick: (c) => { c(); resolve(true); } }
