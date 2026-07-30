@@ -7,6 +7,7 @@
   const STORES = ['tasks', 'calendar', 'notes', 'habits', 'habitlogs', 'bookmarks', 'finance', 'content', 'planning', 'meta'];
   const SYNC_STORES = STORES.filter(s => s !== 'meta');
   let _db = null;
+  let _suppressSync = false; // 同步自身的写操作不触发再次同步，避免死循环
 
   function uid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -49,12 +50,16 @@
     const os = await _tx(store, 'readonly');
     return _p(os.get(id));
   }
+  function afterWrite() {
+    if (!_suppressSync && WB.app && WB.app.scheduleSync) WB.app.scheduleSync();
+  }
   async function put(store, item) {
     if (store !== 'meta' && item && item.id) {
       item.updatedAt = Math.max(item.updatedAt || 0, Date.now());
     }
     const os = await _tx(store, 'readwrite');
     await _p(os.put(item));
+    afterWrite();
     return item;
   }
   async function bulkPut(store, items) {
@@ -64,6 +69,7 @@
       if (store !== 'meta' && it && it.id && !it.updatedAt) it.updatedAt = Date.now();
       os.put(it);
     }
+    afterWrite();
     return new Promise((res, rej) => {
       tx.oncomplete = () => res(items);
       tx.onerror = () => rej(tx.error);
@@ -82,6 +88,7 @@
     item.updatedAt = Date.now();
     const os = await _tx(store, 'readwrite');
     await _p(os.put(item));
+    afterWrite();
   }
   async function hardDelete(store, id) {
     const os = await _tx(store, 'readwrite');
@@ -103,6 +110,7 @@
 
   WB.store = {
     open, getAll, get, put, bulkPut, remove, hardDelete, clear,
-    getMeta, setMeta, uid, STORES, SYNC_STORES, DB_NAME
+    getMeta, setMeta, uid, STORES, SYNC_STORES, DB_NAME,
+    setSuppressSync(v) { _suppressSync = !!v; }
   };
 })(window.WB = window.WB || {});
