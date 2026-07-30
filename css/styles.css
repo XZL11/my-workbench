@@ -110,6 +110,9 @@ button { font-family: inherit; cursor: pointer; }
 }
 .card .row-actions { margin-left: auto; display: flex; gap: 4px; flex: 0 0 auto; }
 .icon-btn { border: 0; background: transparent; font-size: 16px; padding: 6px; border-radius: 8px; line-height: 1; }
+/* 关键修复：图标按钮内的 SVG 不接收指针事件，点击穿透到按钮本身，
+   避免 e.target 落到 <svg>/<path> 上导致 edit/del 判定失效（详见 CODE-REVIEW C2） */
+.icon-btn > svg { pointer-events: none; }
 .icon-btn:hover { background: var(--surface-2); }
 .muted { color: var(--muted); font-size: 13px; }
 .tag { background: var(--surface-2); color: var(--muted); font-size: 12px; padding: 2px 8px; border-radius: 6px; }
