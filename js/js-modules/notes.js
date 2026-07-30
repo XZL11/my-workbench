@@ -122,5 +122,5 @@
     });
   }
 
-  WB.modules.push({ id: 'notes', title: '笔记', icon: '📝', render });
+  WB.modules.push({ id: 'notes', title: '笔记', icon: 'note', render });
 })(window.WB = window.WB || {});
