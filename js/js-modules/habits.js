@@ -8,7 +8,7 @@
     return `
       <div class="form">
         <div class="row">
-          <label style="flex:1">图标<input id="f-emoji" class="input" value="${ui.escapeHtml(h.emoji || '⭐')}" maxlength="2"></label>
+          <label style="flex:1">图标<input id="f-emoji" class="input" value="${ui.escapeHtml(h.emoji || '⭐')}" maxlength="8"></label>
           <label style="flex:3">名称<input id="f-name" class="input" value="${ui.escapeHtml(h.name || '')}" placeholder="如：读书 30 分钟"></label>
         </div>
         <div class="row">
