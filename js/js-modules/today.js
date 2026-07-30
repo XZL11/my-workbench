@@ -224,5 +224,5 @@
     }
   }
 
-  WB.modules.unshift({ id: 'today', title: '今日', icon: '📌', render });
+  WB.modules.unshift({ id: 'today', title: '今日', icon: 'home', render });
 })(window.WB = window.WB || {});
