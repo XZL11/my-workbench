@@ -6,6 +6,7 @@
   const PRI = { 1: '高', 2: '中', 3: '低' };
   let view = new Date(); view.setDate(1);
   let events = []; // 缓存，避免每次重绘重新读库
+  let tasks = [];  // 待办缓存（与日程统一展示）
 
   function weekdayCN(d) { const w = '日一二三四五六'; return '周' + w[new Date(d).getDay()]; }
 
@@ -42,11 +43,12 @@
 
   async function render(root) {
     events = (await store.getAll('calendar')).filter(i => !i._deleted);
+    tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
     root.innerHTML = `
       <div class="page">
         <div class="page-head">
           <h1>📅 日程安排</h1>
-          <button class="btn primary" id="add">+ 新建</button>
+          <button class="btn primary" id="add">+ 待办</button>
         </div>
         <div class="cal-nav">
           <button class="btn ghost" id="prev">‹</button>
@@ -55,7 +57,7 @@
           <button class="btn ghost" id="next">›</button>
         </div>
         <div class="cal-grid" id="grid"></div>
-        <p class="muted" style="margin-top:10px;font-size:12px">提示：点击任意日期，可滑入查看并管理当天的日程、待办、习惯与记账。</p>
+        <p class="muted" style="margin-top:10px;font-size:12px">提示：点击任意日期，可滑入查看并管理当天的待办、习惯与记账。</p>
       </div>
       <div class="day-detail" id="day">
         <div class="dd-head">
@@ -85,9 +87,11 @@
       html += cells.map(c => {
         const key = ui.fmtDate(c.d);
         const evs = events.filter(e => e.startDate === key).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+        const dayT = tasks.filter(t => t.dueDate === key);
         const evHtml = evs.map(e => `<div class="cal-ev" data-id="${e.id}">${e.startTime ? ui.escapeHtml(e.startTime) + ' ' : ''}${ui.escapeHtml(e.title)}</div>`).join('');
+        const taskHtml = dayT.map(t => `<div class="cal-ev todo pri-${t.priority} ${t.done ? 'done' : ''}">${ui.escapeHtml(t.title)}</div>`).join('');
         return `<div class="cal-cell ${c.out ? 'out' : ''} ${key === todayKey ? 'today' : ''}" data-date="${key}">
-          <div class="cal-num">${c.d.getDate()}</div>${evHtml}</div>`;
+          <div class="cal-num">${c.d.getDate()}</div>${evHtml}${taskHtml}</div>`;
       }).join('');
       grid.innerHTML = html;
     }
@@ -131,17 +135,17 @@
           obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
           obj.note = m.dialog.querySelector('#f-note').value;
           await store.put('tasks', obj); close();
+          tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
+          paint();
           if (dd.classList.contains('open')) paintDay(dd.dataset.key);
         } }]
       });
       if (!t) setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
 
-    root.querySelector('#add').onclick = () => openForm(null, ui.fmtDate(Date.now()));
+    root.querySelector('#add').onclick = () => openTaskForm(null, ui.fmtDate(Date.now()));
 
-    grid.addEventListener('click', async e => {
-      const evEl = e.target.closest('.cal-ev');
-      if (evEl) { openForm(await store.get('calendar', evEl.dataset.id)); return; }
+    grid.addEventListener('click', e => {
       const cell = e.target.closest('.cal-cell');
       if (cell) openDay(cell.dataset.date);
     });
@@ -165,21 +169,29 @@
 
       const logMap = {}; logs.forEach(l => { if (l && l.id) logMap[l.id] = l; });
 
-      const evHTML = dayEvents.length ? dayEvents.map(e => `
-        <div class="dd-item ev" data-id="${e.id}">
-          <div class="dd-time">${e.startTime || '全天'}</div>
-          <div class="dd-body"><div class="dd-title">${ui.escapeHtml(e.title)}</div>
-          ${e.location ? `<div class="muted">📍 ${ui.escapeHtml(e.location)}</div>` : ''}
-          ${e.note ? `<div class="dd-note">${ui.escapeHtml(e.note)}</div>` : ''}</div>
-          <button class="icon-btn dd-edit" title="编辑">✏️</button>
-        </div>`).join('') : ui.emptyState('这一天还没有日程');
-
-      const todoHTML = tasks.length ? tasks.map(t => `
-        <div class="dd-item todo ${t.done ? 'done' : ''}" data-id="${t.id}">
+      // 统一展示：当日待办 = 定时日程(遗留) + 当天待办，不再分两块
+      const items = [];
+      dayEvents.forEach(e => items.push({ kind: 'ev', sort: e.startTime || '99:99', raw: e }));
+      tasks.forEach(t => items.push({ kind: 'todo', sort: '99:99', raw: t }));
+      items.sort((a, b) => a.sort.localeCompare(b.sort));
+      const dayHTML = items.length ? items.map(it => {
+        if (it.kind === 'ev') {
+          const e = it.raw;
+          return `<div class="dd-item ev" data-id="${e.id}">
+            <div class="dd-time">${e.startTime || '全天'}</div>
+            <div class="dd-body"><div class="dd-title">${ui.escapeHtml(e.title)}</div>
+            ${e.location ? `<div class="muted">📍 ${ui.escapeHtml(e.location)}</div>` : ''}
+            ${e.note ? `<div class="dd-note">${ui.escapeHtml(e.note)}</div>` : ''}</div>
+            <button class="icon-btn dd-edit" title="编辑">✏️</button>
+          </div>`;
+        }
+        const t = it.raw;
+        return `<div class="dd-item todo ${t.done ? 'done' : ''}" data-id="${t.id}">
           <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
           <div class="dd-body"><div class="dd-title">${ui.escapeHtml(t.title)}</div>
           <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span></div></div>
-        </div>`).join('') : ui.emptyState('这一天没有待办');
+        </div>`;
+      }).join('') : ui.emptyState('这一天还没有待办');
 
       const habitHTML = habits.length ? habits.map(h => {
         const rec = logMap[h.id + ':' + dateKey]; const done = rec && rec.done;
@@ -198,8 +210,7 @@
         </div>`).join('') : ui.emptyState('这一天没有记账');
 
       root.querySelector('#dd-content').innerHTML = `
-        <div class="dd-sec"><div class="dd-sec-head"><h2>📅 日程</h2><button class="btn ghost sm" data-add="ev">+ 日程</button></div><div id="dd-ev">${evHTML}</div></div>
-        <div class="dd-sec"><div class="dd-sec-head"><h2>✅ 待办</h2><button class="btn ghost sm" data-add="task">+ 待办</button></div><div id="dd-task">${todoHTML}</div></div>
+        <div class="dd-sec"><div class="dd-sec-head"><h2>📋 当日待办</h2><button class="btn ghost sm" data-add="task">+ 待办</button></div><div id="dd-task">${dayHTML}</div></div>
         <div class="dd-sec"><div class="dd-sec-head"><h2>🔥 习惯打卡</h2></div><div id="dd-habit">${habitHTML}</div></div>
         <div class="dd-sec"><div class="dd-sec-head"><h2>💰 记账</h2></div><div id="dd-fin">${finHTML}</div></div>`;
     }
@@ -207,7 +218,6 @@
     // 日详情内部交互（事件委托，仅绑定一次）
     dd.addEventListener('click', async e => {
       if (e.target.closest('.dd-back')) { closeDay(); return; }
-      if (e.target.closest('[data-add="ev"]')) { openForm(null, dd.dataset.key); return; }
       if (e.target.closest('[data-add="task"]')) { openTaskForm(null, dd.dataset.key); return; }
       const evItem = e.target.closest('.dd-item.ev');
       if (evItem && (e.target.classList.contains('dd-edit') || e.target.closest('.dd-body'))) {
