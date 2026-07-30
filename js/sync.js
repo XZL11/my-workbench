@@ -83,7 +83,7 @@
       Authorization: p.auth(cfg.token),
       Accept: p.accept
     }, opts.headers || {});
-    return fetch(p.base + path, Object.assign({ headers }, opts));
+    return fetch(p.base + path, Object.assign({}, opts, { headers }));
   }
 
   // 保存前校验 Token 能否访问该仓库，避免同步时才报 401
