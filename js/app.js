@@ -13,7 +13,7 @@
   function renderNav() {
     const cur = currentId();
     const item = m => `<button class="nav-item ${m.id === cur ? 'active' : ''}" data-id="${m.id}">
-        <span class="nav-icon">${m.icon}</span><span class="nav-label">${ui.escapeHtml(m.title)}</span></button>`;
+        <span class="nav-icon">${ui.icon(m.icon)}</span><span class="nav-label">${ui.escapeHtml(m.title)}</span></button>`;
     sidebarEl.innerHTML = WB.modules.map(item).join('');
     bottomEl.innerHTML = WB.modules.map(item).join('');
   }
@@ -26,6 +26,12 @@
     viewEl.innerHTML = '<div class="loading">加载中…</div>';
     try { await mod.render(viewEl); }
     catch (e) { viewEl.innerHTML = '<div class="empty">加载出错：' + ui.escapeHtml(e.message) + '</div>'; }
+    // 把卡片内的 emoji 操作按钮替换为统一 SVG 图标
+    viewEl.querySelectorAll('.icon-btn').forEach(b => {
+      const t = (b.textContent || '').trim();
+      const map = { '✏️': 'pencil', '🗑️': 'trash', '➕': 'plus', '＋': 'plus' };
+      if (map[t]) b.innerHTML = ui.icon(map[t], 16);
+    });
     closeDrawer();
   }
 
@@ -56,6 +62,10 @@
   async function init() {
     appEl = document.getElementById('app');
     sidebarEl = document.getElementById('sidebar');
+    const initDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.getElementById('menu-toggle').innerHTML = ui.icon('menu', 22);
+    document.getElementById('theme-toggle').innerHTML = ui.icon(initDark ? 'moon' : 'sun', 20);
     bottomEl = document.getElementById('bottomtabs');
     viewEl = document.getElementById('view');
     syncDot = document.getElementById('sync-dot');
@@ -71,6 +81,7 @@
       const curEff = cur || (sysDark ? 'dark' : 'light');
       const next = curEff === 'dark' ? 'light' : 'dark';
       await ui.setTheme(next);
+      document.getElementById('theme-toggle').innerHTML = ui.icon(next === 'dark' ? 'sun' : 'moon', 20);
       ui.toast('已切换到' + (next === 'dark' ? '深色' : '浅色'));
     };
     document.getElementById('menu-toggle').onclick = openDrawer;
