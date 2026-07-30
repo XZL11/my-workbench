@@ -105,15 +105,20 @@
   async function syncAll(onProgress) {
     const results = {};
     const errors = [];
-    for (const name of store.SYNC_STORES) {
-      try {
-        if (onProgress) onProgress('同步 ' + name + ' …');
-        results[name] = await syncModule(name);
-      } catch (e) {
-        errors.push(name + '：' + e.message);
+    store.setSuppressSync(true); // 同步内部的写操作不要再次触发自动同步
+    try {
+      for (const name of store.SYNC_STORES) {
+        try {
+          if (onProgress) onProgress('同步 ' + name + ' …');
+          results[name] = await syncModule(name);
+        } catch (e) {
+          errors.push(name + '：' + e.message);
+        }
       }
+      await store.setMeta('last_sync_at', Date.now());
+    } finally {
+      store.setSuppressSync(false);
     }
-    await store.setMeta('last_sync_at', Date.now());
     if (errors.length) throw new Error('部分模块同步失败 — ' + errors.join('；'));
     return results;
   }
