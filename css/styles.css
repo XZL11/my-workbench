@@ -276,3 +276,9 @@ button { font-family: inherit; cursor: pointer; }
 .trend-legend .lg.inc::before { background: var(--success); }
 .trend-legend .lg.exp::before { background: var(--danger); }
 
+/* ===== 今日聚合视图 ===== */
+.ev { cursor: pointer; }
+.ev-time { font-weight: 700; width: 56px; flex: 0 0 auto; color: var(--primary); font-variant-numeric: tabular-nums; }
+.ev-main { flex: 1; min-width: 0; }
+.ev-title { font-weight: 600; }
+
