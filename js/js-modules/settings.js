@@ -190,5 +190,5 @@
     };
   }
 
-  WB.modules.push({ id: 'settings', title: '设置', icon: '⚙️', render });
+  WB.modules.push({ id: 'settings', title: '设置', icon: 'settings', render });
 })(window.WB = window.WB || {});
