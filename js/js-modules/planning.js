@@ -5,22 +5,15 @@
   const TYPE = { year: '年度', quarter: '季度', goal: '目标', milestone: '里程碑' };
   const STATUS = { todo: '待启动', doing: '进行中', done: '已完成' };
 
-  function formHTML(p) {
+  function formFields(p) {
     p = p || {};
-    return `
-      <div class="form">
-        <label>标题<input id="f-title" class="input" value="${ui.escapeHtml(p.title || '')}" placeholder="如：2026 健康计划"></label>
-        <div class="row">
-          <label style="flex:1">类型<select id="f-type" class="input">
-            ${Object.keys(TYPE).map(k => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${TYPE[k]}</option>`).join('')}
-          </select></label>
-          <label style="flex:1">状态<select id="f-status" class="input">
-            ${Object.keys(STATUS).map(k => `<option value="${k}" ${p.status === k ? 'selected' : ''}>${STATUS[k]}</option>`).join('')}
-          </select></label>
-        </div>
-        <label>截止日期<input id="f-due" class="input" type="date" value="${p.dueDate || ''}"></label>
-        <label>备注<textarea id="f-note" class="input" rows="3">${ui.escapeHtml(p.note || '')}</textarea></label>
-      </div>`;
+    return [
+      { name: 'title', label: '标题', value: p.title || '', placeholder: '如：2026 健康计划', required: true },
+      { name: 'type', label: '类型', type: 'select', value: p.type, row: 'a', options: Object.keys(TYPE).map(k => ({ value: k, label: TYPE[k] })) },
+      { name: 'status', label: '状态', type: 'select', value: p.status, row: 'a', options: Object.keys(STATUS).map(k => ({ value: k, label: STATUS[k] })) },
+      { name: 'dueDate', label: '截止日期', type: 'date', value: p.dueDate || '' },
+      { name: 'note', label: '备注', type: 'textarea', value: p.note || '' }
+    ];
   }
 
   async function render(root) {
@@ -39,7 +32,7 @@
       let view = all;
       if (f && f !== 'all') view = view.filter(i => i.type === f);
       view = view.sort((a, b) => (a.type).localeCompare(b.type) || (a.dueDate || '').localeCompare(b.dueDate || ''));
-      if (!view.length) { list.innerHTML = ui.emptyState('还没有规划，开始制定你的目标吧'); return; }
+      if (!view.length) { list.innerHTML = ui.emptyState('还没有规划，开始制定你的目标吧', { action: { label: '新建规划' } }); bindEmpty(); return; }
       list.innerHTML = view.map(p => `
         <div class="card plan st-${p.status}" data-id="${p.id}">
           <div class="plan-main">
@@ -55,8 +48,14 @@
               <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
               <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
             </div>
-        </div>`).join('');
+        </div>      `).join('');
+      bindEmpty();
     }
+    function bindEmpty() {
+      const ea = list.querySelector('#empty-add');
+      if (ea) ea.onclick = () => openForm(null);
+    }
+    async function refresh() { all = (await store.getAll('planning')).filter(i => !i._deleted); paint(); }
     paint('all');
     root.querySelector('#filters').addEventListener('click', e => {
       if (!e.target.dataset.f) return;
@@ -66,25 +65,26 @@
 
     function openForm(p) {
       const m = ui.openModal({
-        title: p ? '编辑规划' : '新建规划', html: formHTML(p),
+        title: p ? '编辑规划' : '新建规划', html: ui.form(formFields(p)),
         actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
           const title = m.dialog.querySelector('#f-title').value.trim();
           if (!title) { ui.toast('请填写标题', 'warn'); return; }
           const obj = p ? Object.assign({}, p) : { id: store.uid() };
           obj.title = title; obj.type = m.dialog.querySelector('#f-type').value;
           obj.status = m.dialog.querySelector('#f-status').value;
-          obj.dueDate = m.dialog.querySelector('#f-due').value || '';
+          obj.dueDate = m.dialog.querySelector('#f-dueDate').value || '';
           obj.note = m.dialog.querySelector('#f-note').value;
-          await store.put('planning', obj); close(); WB.app.reload();
+          await store.put('planning', obj); close(); await refresh();
         } }]
       });
+      ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该规划？')) { await store.remove('planning', id); WB.app.reload(); } return; }
+      if (e.target.closest('.icon-btn.del')) { ui.trash('planning', id, { label: '已删除规划', repaint: refresh }); return; }
       openForm(await store.get('planning', id));
     });
   }
