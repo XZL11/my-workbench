@@ -130,10 +130,10 @@
       if (navigator.onLine) {
         stat.textContent = '首次同步中…';
         try {
-          await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
+          const r = await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
           const now = await store.getMeta('last_sync_at', null);
           stat.textContent = '已配置（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）· 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
-          ui.toast('同步完成', 'success');
+          ui.toast(r && r.pulled ? ('同步完成，已合并 ' + r.pulled + ' 项云端更新') : '同步完成', 'success');
         } catch (e) {
           stat.textContent = '同步失败：' + e.message;
           ui.toast('同步失败：' + e.message, 'error');
@@ -153,10 +153,10 @@
       if (!sync.isConfigured()) { ui.toast('请先保存同步配置', 'warn'); return; }
       stat.textContent = '同步中…';
       try {
-        await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
+        const r = await sync.syncAll(p => { stat.textContent = '同步中：' + p; });
         const now = await store.getMeta('last_sync_at', null);
         stat.textContent = '已配置（' + (selPlatform === 'gitee' ? 'Gitee' : 'GitHub') + '）· 上次同步：' + (now ? ui.fmtDateTime(now) : '刚刚');
-        ui.toast('同步完成', 'success');
+        ui.toast(r && r.pulled ? ('同步完成，已合并 ' + r.pulled + ' 项云端更新') : '同步完成', 'success');
       } catch (e) {
         stat.textContent = '同步失败';
         ui.toast('同步失败：' + e.message, 'error');
