@@ -842,16 +842,6 @@ body {
   to   { opacity: 1; transform: none; }
 }
 
-/* 今日日程条目 */
-.sched-item {
-  display: flex; align-items: center; gap: 10px; padding: 9px 10px;
-  border-radius: 10px; background: var(--surface-2);
-  cursor: pointer; transition: background .15s ease, transform .15s ease;
-}
-.sched-item:hover { background: var(--primary-weak); transform: translateY(-1px); }
-.sched-time { font-weight: 600; color: var(--primary); font-size: 13px; flex: 0 0 auto; width: 48px; }
-.sched-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 /* 窄屏：网格收窄为单列堆叠 */
 @media (max-width: 560px) {
   .dash-grid { grid-template-columns: 1fr; gap: 12px; }
