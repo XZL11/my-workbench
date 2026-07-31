@@ -11,22 +11,6 @@
 
   function weekdayCN(d) { const w = '日一二三四五六'; return '周' + w[new Date(d).getDay()]; }
 
-  function formHTML(ev, defDate) {
-    ev = ev || {};
-    const d = ev.startDate || defDate || ui.fmtDate(Date.now());
-    const t = ev.startTime || '';
-    return `
-      <div class="form">
-        <label>标题<input id="f-title" class="input" value="${ui.escapeHtml(ev.title || '')}" placeholder="日程标题"></label>
-        <div class="row">
-          <label style="flex:1">日期<input id="f-date" class="input" type="date" value="${d}"></label>
-          <label style="flex:1">时间<input id="f-time" class="input" type="time" value="${t}"></label>
-        </div>
-        <label>地点<input id="f-loc" class="input" value="${ui.escapeHtml(ev.location || '')}" placeholder="可选"></label>
-        <label>备注<textarea id="f-note" class="input" rows="3">${ui.escapeHtml(ev.note || '')}</textarea></label>
-      </div>`;
-  }
-
   function taskFormHTML(t) {
     t = t || {};
     return `<div class="form">
@@ -48,6 +32,36 @@
     habitList = (await store.getAll('habits')).filter(i => !i._deleted);
     logList = (await store.getAll('habitlogs')).filter(i => !i._deleted);
     finList = (await store.getAll('finance')).filter(i => !i._deleted);
+
+    // 数据逻辑统一：把遗留「日程事件」(calendar store) 一次性迁移为「待办」(tasks)，
+    // 使"待办即日程"成为唯一真相源，消除双 store 不同步。迁移后原事件软删除（墓碑）。
+    try {
+      if ((await store.getMeta('migrated_calendar_to_tasks', 0)) !== 1) {
+        store.setSuppressSync(true);
+        try {
+          for (const ev of events) {
+            if (!ev || ev._deleted) continue;
+            await store.put('tasks', {
+              id: store.uid(),
+              createdAt: ev.updatedAt || ev.createdAt || Date.now(),
+              title: ev.title || '（无标题日程）',
+              dueDate: ev.startDate || ui.fmtDate(Date.now()),
+              priority: 2,
+              tags: [],
+              note: [ev.location ? '📍 ' + ev.location : '', ev.note || ''].filter(Boolean).join('\n'),
+              migratedFrom: ev.id
+            });
+            await store.remove('calendar', ev.id);
+          }
+          await store.setMeta('migrated_calendar_to_tasks', 1);
+        } finally {
+          store.setSuppressSync(false);
+        }
+        events = (await store.getAll('calendar')).filter(i => !i._deleted);
+        tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
+      }
+    } catch (err) { console.warn('calendar→tasks 迁移跳过', err); }
+
     root.innerHTML = `
       <div class="page">
         <div class="page-head">
@@ -90,12 +104,10 @@
       let html = WK.map(w => `<div class="cal-wk">${w}</div>`).join('');
       html += cells.map(c => {
         const key = ui.fmtDate(c.d);
-        const evs = events.filter(e => e.startDate === key).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
-        const dayT = tasks.filter(t => t.dueDate === key);
-        const evHtml = evs.map(e => `<div class="cal-ev" data-id="${e.id}">${e.startTime ? ui.escapeHtml(e.startTime) + ' ' : ''}${ui.escapeHtml(e.title)}</div>`).join('');
-        const taskHtml = dayT.map(t => `<div class="cal-ev todo pri-${t.priority} ${t.done ? 'done' : ''}">${ui.escapeHtml(t.title)}</div>`).join('');
-        return `<div class="cal-cell ${c.out ? 'out' : ''} ${key === todayKey ? 'today' : ''}" data-date="${key}">
-          <div class="cal-num">${c.d.getDate()}</div>${evHtml}${taskHtml}</div>`;
+      const dayT = tasks.filter(t => t.dueDate === key);
+      const taskHtml = dayT.map(t => `<div class="cal-ev todo pri-${t.priority} ${t.done ? 'done' : ''}">${ui.escapeHtml(t.title)}</div>`).join('');
+      return `<div class="cal-cell ${c.out ? 'out' : ''} ${key === todayKey ? 'today' : ''}" data-date="${key}">
+        <div class="cal-num">${c.d.getDate()}</div>${taskHtml}</div>`;
       }).join('');
       grid.innerHTML = html;
     }
@@ -104,27 +116,6 @@
     root.querySelector('#prev').onclick = () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); paint(); };
     root.querySelector('#next').onclick = () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); paint(); };
     root.querySelector('#today').onclick = () => { view = new Date(); view.setDate(1); paint(); };
-
-    function openForm(ev, defDate) {
-      const m = ui.openModal({
-        title: ev ? '编辑日程' : '新建日程', html: formHTML(ev, defDate),
-        actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
-          const title = m.dialog.querySelector('#f-title').value.trim();
-          if (!title) { ui.toast('请填写标题', 'warn'); return; }
-          const obj = ev ? Object.assign({}, ev) : { id: store.uid() };
-          obj.title = title;
-          obj.startDate = m.dialog.querySelector('#f-date').value;
-          obj.startTime = m.dialog.querySelector('#f-time').value || '';
-          obj.location = m.dialog.querySelector('#f-loc').value;
-          obj.note = m.dialog.querySelector('#f-note').value;
-          await store.put('calendar', obj);
-          events = (await store.getAll('calendar')).filter(i => !i._deleted);
-          close(); paint();
-          if (dd.classList.contains('open')) paintDay(dd.dataset.key);
-        } }]
-      });
-      setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
-    }
 
     function openTaskForm(t, dueDate) {
       const m = ui.openModal({
@@ -165,7 +156,6 @@
     function closeDay() { dd.classList.remove('open'); }
 
     async function paintDay(dateKey) {
-      const dayEvents = events.filter(e => e.startDate === dateKey).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
       const dayTasks = tasks.filter(i => !i._deleted && i.dueDate === dateKey);
       const habits = habitList;
       const logs = logList;
@@ -173,29 +163,13 @@
 
       const logMap = {}; logs.forEach(l => { if (l && l.id) logMap[l.id] = l; });
 
-      // 统一展示：当日待办 = 定时日程(遗留) + 当天待办，不再分两块
-      const items = [];
-      dayEvents.forEach(e => items.push({ kind: 'ev', sort: e.startTime || '99:99', raw: e }));
-      dayTasks.forEach(t => items.push({ kind: 'todo', sort: '99:99', raw: t }));
-      items.sort((a, b) => a.sort.localeCompare(b.sort));
-      const dayHTML = items.length ? items.map(it => {
-        if (it.kind === 'ev') {
-          const e = it.raw;
-          return `<div class="dd-item ev" data-id="${e.id}">
-            <div class="dd-time">${e.startTime || '全天'}</div>
-            <div class="dd-body"><div class="dd-title">${ui.escapeHtml(e.title)}</div>
-            ${e.location ? `<div class="muted">📍 ${ui.escapeHtml(e.location)}</div>` : ''}
-            ${e.note ? `<div class="dd-note">${ui.escapeHtml(e.note)}</div>` : ''}</div>
-            <button class="icon-btn dd-edit" title="编辑">✏️</button>
-          </div>`;
-        }
-        const t = it.raw;
-        return `<div class="dd-item todo ${t.done ? 'done' : ''}" data-id="${t.id}">
+      // 当日待办 = 当天待办（待办即日程：统一为 tasks 单一数据源，不再混入 legacy 事件）
+      const dayHTML = dayTasks.length ? dayTasks.map(t => `
+        <div class="dd-item todo ${t.done ? 'done' : ''}" data-id="${t.id}">
           <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
           <div class="dd-body"><div class="dd-title">${ui.escapeHtml(t.title)}</div>
           <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span></div></div>
-        </div>`;
-      }).join('') : ui.emptyState('这一天还没有待办');
+        </div>`).join('') : ui.emptyState('这一天还没有待办');
 
       const habitHTML = habits.length ? habits.map(h => {
         const rec = logMap[h.id + ':' + dateKey]; const done = rec && rec.done;
@@ -223,10 +197,6 @@
     dd.addEventListener('click', async e => {
       if (e.target.closest('.dd-back')) { closeDay(); return; }
       if (e.target.closest('[data-add="task"]')) { openTaskForm(null, dd.dataset.key); return; }
-      const evItem = e.target.closest('.dd-item.ev');
-      if (evItem && (e.target.closest('.dd-edit') || e.target.closest('.dd-body'))) {
-        openForm(await store.get('calendar', evItem.dataset.id)); return;
-      }
       const todoItem = e.target.closest('.dd-item.todo');
       if (todoItem && e.target.classList.contains('chk')) {
         const t = await store.get('tasks', todoItem.dataset.id);
