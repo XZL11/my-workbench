@@ -10,7 +10,7 @@
     return `
       <div class="form">
         <div class="row">
-          <label style="flex:2">标题<input id="f-title" class="input" value="${ui.escapeHtml(c.title || '')}" placeholder="标题"></label>
+          <label style="flex:2">标题<input id="f-title" class="input" data-required value="${ui.escapeHtml(c.title || '')}" placeholder="标题"></label>
           <label style="flex:1">类型<select id="f-kind" class="input">
             ${Object.keys(KIND).map(k => `<option value="${k}" ${c.kind === k ? 'selected' : ''}>${KIND[k]}</option>`).join('')}
           </select></label>
@@ -53,7 +53,7 @@
       if (kf !== 'all') view = view.filter(i => i.kind === kf);
       if (sf !== 'all') view = view.filter(i => i.status === sf);
       view = view.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      if (!view.length) { list.innerHTML = ui.emptyState('还没有内容，点新建开始创作'); return; }
+      if (!view.length) { list.innerHTML = ui.emptyState('还没有内容，点新建开始创作', { action: { label: '新建内容' } }); bindEmpty(); return; }
       list.innerHTML = view.map(c => `
         <div class="card content" data-id="${c.id}">
           <div class="content-main">
@@ -69,8 +69,14 @@
             <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
             <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
           </div>
-        </div>`).join('');
+        </div>      `).join('');
+      bindEmpty();
     }
+    function bindEmpty() {
+      const ea = list.querySelector('#empty-add');
+      if (ea) ea.onclick = () => openForm(null);
+    }
+    async function refresh() { all = (await store.getAll('content')).filter(i => !i._deleted); paint(); }
     paint();
     root.querySelector('#kfilter').addEventListener('change', paint);
     root.querySelector('#sfilter').addEventListener('change', paint);
@@ -87,19 +93,20 @@
           obj.platform = m.dialog.querySelector('#f-platform').value;
           obj.note = m.dialog.querySelector('#f-note').value;
           obj.body = m.dialog.querySelector('#f-body').value;
-          await store.put('content', obj); close(); WB.app.reload();
+          await store.put('content', obj); close(); await refresh();
         } }]
       });
       const ta = m.dialog.querySelector('#f-body'), pv = m.dialog.querySelector('#f-preview');
       const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
       ta.addEventListener('input', upd); upd();
+      ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该内容？')) { await store.remove('content', id); WB.app.reload(); } return; }
+      if (e.target.closest('.icon-btn.del')) { ui.trash('content', id, { label: '已删除内容', repaint: refresh }); return; }
       openForm(await store.get('content', id));
     });
   }
