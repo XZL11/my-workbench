@@ -148,9 +148,18 @@ button { font-family: inherit; cursor: pointer; }
 
 /* 习惯 */
 .habit { --hc: var(--primary); }
-.habit-check { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--hc);
-  background: transparent; font-size: 20px; flex: 0 0 auto; display: grid; place-items: center; }
-.habit-check.on { background: var(--hc); color: #fff; }
+.habit-check {
+  width: 28px; height: 28px; flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--hc) 40%, var(--border));
+  background: transparent; color: #fff;
+  display: grid; place-items: center; cursor: pointer;
+  transition: background-color .2s ease, border-color .2s ease, transform .12s ease;
+}
+.habit-check:hover { border-color: var(--hc); }
+.habit-check:active { transform: scale(.88); }
+.habit-check.on { background: var(--hc); border-color: var(--hc); }
+.habit-check svg { width: 16px; height: 16px; }
 .habit-main { flex: 1; min-width: 0; }
 .habit-name { font-weight: 600; }
 .habit-meta { font-size: 13px; color: var(--muted); margin: 2px 0 6px; }
@@ -292,7 +301,7 @@ button { font-family: inherit; cursor: pointer; }
 .dd-item.ev { cursor: pointer; }
 .dd-edit { flex: 0 0 auto; }
 .dd-item .chk { margin-top: 3px; width: 18px; height: 18px; flex: 0 0 auto; }
-.dd-item.habit .habit-check { width: 44px; height: 44px; }
+.dd-item.habit .habit-check { width: 28px; height: 28px; }
 
 /* ===== 笔记搜索高亮 ===== */
 .note-title mark, .note-prev mark {
