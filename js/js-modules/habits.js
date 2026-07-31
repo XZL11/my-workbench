@@ -50,10 +50,7 @@
 
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>🔥 习惯打卡</h1>
-          <button class="btn primary" id="add">+ 新建</button>
-        </div>
+        ${ui.pageHead('flame', '习惯打卡', { actions: '<button class="btn primary" id="add">+ 新建</button>' })}
         <div id="list" class="list"></div>
       </div>`;
     const list = root.querySelector('#list');
