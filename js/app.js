@@ -4,10 +4,11 @@
   const store = WB.store, ui = WB.ui, sync = WB.sync;
   let viewEl, sidebarEl, bottomEl, syncDot, appEl;
 
+  let _ids = null;
   function currentId() {
     const h = location.hash.replace(/^#\/?/, '');
-    const ids = WB.modules.map(m => m.id);
-    return ids.indexOf(h) >= 0 ? h : WB.modules[0].id;
+    if (!_ids) _ids = WB.modules.map(m => m.id); // L5：模块 id 列表只算一次
+    return _ids.indexOf(h) >= 0 ? h : WB.modules[0].id;
   }
 
   // 导航 DOM 只构建一次（init 时调用），route 时仅切换 active 类，
@@ -28,7 +29,8 @@
     const mod = WB.modules.find(m => m.id === id);
     if (!mod) return;
     setActiveNav(id);
-    viewEl.innerHTML = '<div class="loading">加载中…</div>';
+    store.clearSubs(); // L2：清除上一个模块的数据订阅，避免跨页回调
+    viewEl.innerHTML = ui.skeleton(6); // S5：骨架屏占位，数据就绪后替换
     try { await mod.render(viewEl); }
     catch (e) { viewEl.innerHTML = '<div class="empty">加载出错：' + ui.escapeHtml(e.message) + '</div>'; }
     closeDrawer();
@@ -44,7 +46,10 @@
 
   async function autoSync() {
     if (!sync.isConfigured() || !navigator.onLine) return;
-    try { await sync.syncAll(); }
+    try {
+      const r = await sync.syncAll();
+      if (r && r.pulled) ui.toast('已从云端合并 ' + r.pulled + ' 项更新', 'info'); // L6
+    }
     catch (e) { ui.toast('自动同步部分失败：' + e.message, 'warn'); }
   }
 
@@ -53,6 +58,41 @@
   function scheduleSync() {
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => { autoSync(); }, 2500);
+  }
+
+  // I6 命令面板：Cmd/Ctrl+K 唤起，键盘优先跨模块跳转
+  function openPalette() {
+    if (document.querySelector('.palette-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'palette-overlay';
+    overlay.innerHTML = '<div class="palette"><input class="input palette-input" placeholder="跳转到模块…（↑↓ 选择，Enter 进入，Esc 关闭）"><div class="palette-list"></div></div>';
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('.palette-input');
+    const listEl = overlay.querySelector('.palette-list');
+    let idx = 0;
+    function items() {
+      const q = (input.value || '').toLowerCase();
+      return WB.modules.filter(m => !q || m.title.toLowerCase().includes(q) || m.id.toLowerCase().includes(q));
+    }
+    function renderList() {
+      const its = items();
+      if (idx >= its.length) idx = Math.max(0, its.length - 1);
+      listEl.innerHTML = its.map((m, i) => `<div class="palette-item ${i === idx ? 'active' : ''}" data-id="${m.id}">${ui.icon(m.icon, 16)}<span>${ui.escapeHtml(m.title)}</span></div>`).join('');
+    }
+    function close() { overlay.remove(); document.body.style.overflow = ''; }
+    renderList();
+    setTimeout(() => input.focus(), 30);
+    input.addEventListener('input', () => { idx = 0; renderList(); });
+    input.addEventListener('keydown', e => {
+      const its = items();
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, its.length - 1); renderList(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); renderList(); }
+      else if (e.key === 'Enter') { const m = its[idx]; if (m) { close(); location.hash = '#/' + m.id; } }
+      else if (e.key === 'Escape') { close(); }
+    });
+    listEl.addEventListener('click', e => { const it = e.target.closest('.palette-item'); if (it) { close(); location.hash = '#/' + it.dataset.id; } });
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    document.body.style.overflow = 'hidden';
   }
 
   function openDrawer() { appEl.classList.add('drawer-open'); }
@@ -95,6 +135,7 @@
     });
 
     window.addEventListener('hashchange', route);
+    document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } });
     window.addEventListener('online', () => { updateSyncDot(); autoSync(); });
     window.addEventListener('offline', updateSyncDot);
     updateSyncDot();
