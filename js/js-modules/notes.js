@@ -23,22 +23,13 @@
     return (start > 0 ? '…' : '') + plain.slice(start, end) + (end < plain.length ? '…' : '');
   }
 
-  function formHTML(n) {
+  function formFields(n) {
     n = n || {};
-    return `
-      <div class="form">
-        <div class="row">
-          <label style="flex:2">标题<input id="f-title" class="input" value="${ui.escapeHtml(n.title || '')}" placeholder="标题"></label>
-          <label style="flex:1">类型<select id="f-type" class="input">
-            ${Object.keys(TYPES).map(k => `<option value="${k}" ${n.type === k ? 'selected' : ''}>${TYPES[k]}</option>`).join('')}
-          </select></label>
-        </div>
-        <label>标签（逗号分隔）<input id="f-tags" class="input" value="${ui.escapeHtml((n.tags || []).join(', '))}" placeholder="标签"></label>
-        <div class="editor">
-          <textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">${ui.escapeHtml(n.body || '')}</textarea>
-          <div id="f-preview" class="preview md"></div>
-        </div>
-      </div>`;
+    return [
+      { name: 'title', label: '标题', value: n.title || '', placeholder: '标题', required: true, flex: 2 },
+      { name: 'type', label: '类型', type: 'select', value: n.type, flex: 1, row: 'a', options: Object.keys(TYPES).map(k => ({ value: k, label: TYPES[k] })) },
+      { name: 'tags', label: '标签（逗号分隔）', value: (n.tags || []).join(', '), placeholder: '标签' }
+    ];
   }
 
   async function render(root) {
@@ -64,7 +55,7 @@
       if (tf !== 'all') view = view.filter(i => i.type === tf);
       if (q) view = view.filter(i => (i.title + ' ' + (i.body || '') + ' ' + (i.tags || []).join(' ')).toLowerCase().includes(q));
       view = view.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      if (!view.length) { list.innerHTML = ui.emptyState('没有匹配的笔记'); return; }
+      if (!view.length) { list.innerHTML = ui.emptyState('没有匹配的笔记', { action: { label: '新建笔记' } }); bindEmpty(); return; }
       list.innerHTML = view.map(n => {
         const tags = (n.tags || []).map(x => `<span class="tag">${ui.escapeHtml(x)}</span>`).join('');
         const prev = snippet(n.body, raw);
@@ -81,6 +72,11 @@
             </div>
           </div>`;
       }).join('');
+      bindEmpty();
+    }
+    function bindEmpty() {
+      const ea = list.querySelector('#empty-add');
+      if (ea) ea.onclick = () => openForm(null);
     }
     paint();
     async function refresh() { all = (await store.getAll('notes')).filter(i => !i._deleted); paint(); }
@@ -90,7 +86,7 @@
     function openForm(n) {
       const m = ui.openModal({
         title: n ? '编辑' : '新建笔记',
-        html: formHTML(n),
+        html: ui.form(formFields(n)) + '<div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml(n.body || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -109,13 +105,14 @@
       const pv = m.dialog.querySelector('#f-preview');
       const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
       ta.addEventListener('input', upd); upd();
+      ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该笔记？')) { await store.remove('notes', id); await refresh(); } return; }
+      if (e.target.closest('.icon-btn.del')) { ui.trash('notes', id, { label: '已删除笔记', repaint: refresh }); return; }
       openForm(await store.get('notes', id));
     });
   }
