@@ -76,13 +76,14 @@
               <div class="note-prev muted">${highlight(prev, raw)}</div>
             </div>
             <div class="row-actions">
-              <button class="icon-btn edit" title="编辑">✏️</button>
-              <button class="icon-btn del" title="删除">🗑️</button>
+              <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
+              <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
             </div>
           </div>`;
       }).join('');
     }
     paint();
+    async function refresh() { all = (await store.getAll('notes')).filter(i => !i._deleted); paint(); }
     root.querySelector('#search').addEventListener('input', paint);
     root.querySelector('#typefilter').addEventListener('change', paint);
 
@@ -100,7 +101,7 @@
             obj.type = m.dialog.querySelector('#f-type').value;
             obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
             obj.body = m.dialog.querySelector('#f-body').value;
-            await store.put('notes', obj); close(); WB.app.reload();
+            await store.put('notes', obj); close(); await refresh();
           } }
         ]
       });
@@ -114,7 +115,7 @@
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.classList.contains('del')) { if (await ui.confirm('删除该笔记？')) { await store.remove('notes', id); WB.app.reload(); } return; }
+      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该笔记？')) { await store.remove('notes', id); await refresh(); } return; }
       openForm(await store.get('notes', id));
     });
   }
