@@ -25,7 +25,7 @@
   }
 
   async function render(root) {
-    const all = (await store.getAll('finance')).filter(i => !i._deleted);
+    let all = (await store.getAll('finance')).filter(i => !i._deleted);
     const month = ui.fmtDate(Date.now()).slice(0, 7);
     const monthItems = all.filter(i => (i.date || '').slice(0, 7) === month);
     const income = monthItems.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
@@ -112,12 +112,13 @@
             <div class="fin-meta"><span class="muted">${ui.escapeHtml(r.date || '')}</span>${r.note ? '<span class="muted">' + ui.escapeHtml(r.note) + '</span>' : ''}</div>
           </div>
           <div class="row-actions">
-            <button class="icon-btn edit" title="编辑">✏️</button>
-            <button class="icon-btn del" title="删除">🗑️</button>
+            <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
+            <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
           </div>
         </div>`).join('');
     }
     paint('all');
+    async function refresh() { all = (await store.getAll('finance')).filter(i => !i._deleted); paint(); }
     root.querySelector('#filters').addEventListener('click', e => {
       if (!e.target.dataset.f) return;
       root.querySelectorAll('#filters .chip').forEach(c => c.classList.remove('active'));
@@ -136,7 +137,7 @@
           obj.date = m.dialog.querySelector('#f-date').value || ui.fmtDate(Date.now());
           obj.fixed = m.dialog.querySelector('#f-fixed').checked;
           obj.note = m.dialog.querySelector('#f-note').value;
-          await store.put('finance', obj); close(); WB.app.reload();
+          await store.put('finance', obj); close(); await refresh();
         } }]
       });
       setTimeout(() => m.dialog.querySelector('#f-amount').focus(), 50);
@@ -146,7 +147,7 @@
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('finance', id)); return; }
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该记录？')) { await store.remove('finance', id); WB.app.reload(); } }
+      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该记录？')) { await store.remove('finance', id); await refresh(); } }
     });
   }
 
