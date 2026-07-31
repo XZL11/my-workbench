@@ -25,7 +25,7 @@
 
   async function render(root) {
     const todayKey = ui.fmtDate(Date.now());
-    const tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
+    let tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
     const habits = (await store.getAll('habits')).filter(i => !i._deleted);
     const logs = (await store.getAll('habitlogs')).filter(i => !i._deleted);
     const finance = (await store.getAll('finance')).filter(i => !i._deleted);
@@ -68,7 +68,7 @@
         <div class="card task sub ${s.done ? 'done' : ''}" data-id="${s.id}">
           <input type="checkbox" class="chk" ${s.done ? 'checked' : ''}>
           <div class="task-main"><div class="task-title">${ui.escapeHtml(s.title)}</div></div>
-          <div class="row-actions"><button class="icon-btn del" title="删除">🗑️</button></div>
+          <div class="row-actions"><button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button></div>
         </div>`).join('') + `<div class="card task addsub" data-parent="${t.id}">+ 添加子任务</div></div>` : '';
       return `
         <div class="card task ${t.done ? 'done' : ''}" data-id="${t.id}">
@@ -77,7 +77,7 @@
             <div class="task-title">${ui.escapeHtml(t.title)}</div>
             <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span>${t.dueDate < todayKey ? '<span class="due over">逾期 ' + ui.escapeHtml(t.dueDate) + '</span>' : (t.dueDate ? '<span class="due">' + ui.escapeHtml(t.dueDate) + '</span>' : '<span class="muted">无截止日</span>')}</div>
           </div>
-          <div class="row-actions"><button class="icon-btn edit" title="编辑">✏️</button><button class="icon-btn del" title="删除">🗑️</button></div>
+          <div class="row-actions"><button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button><button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button></div>
         </div>${subHTML}`;
     }
     const todoHTML = todo.length ? todo.map(todoItemHTML).join('') : ui.emptyState('今天没有待办，太棒了 🎉');
@@ -118,8 +118,8 @@
       <div class="page">
         ${ui.pageHead('home', '今日', { subtitle: escapeHtml(greet) + '，' + dateStr + '<div class="muted" style="margin-top:2px">' + todo.length + ' 项待办 · ' + habitDone + '/' + habits.length + ' 习惯已打卡 · 本月结余 ' + (income - expense).toFixed(2) + '</div>' })}
         <div class="stat-row">
-          <div class="stat"><div class="stat-num">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
-          <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}">${overdue.length}</div><div class="stat-label">已逾期</div></div>
+          <div class="stat"><div class="stat-num" id="stat-todo">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
+          <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}" id="stat-overdue">${overdue.length}</div><div class="stat-label">已逾期</div></div>
           <div class="stat"><div class="stat-num">${(income - expense).toFixed(2)}</div><div class="stat-label">本月结余</div></div>
           <div class="stat"><div class="stat-num" id="stat-habit">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
         </div>
@@ -151,7 +151,7 @@
           if (!card.classList.contains('sub')) {
             for (const k of childrenOf(id)) await store.remove('tasks', k.id);
           }
-          WB.app.reload();
+          await renderTodo();
         }
         return;
       }
@@ -160,6 +160,18 @@
       }
     });
     root.querySelector('#add-task').onclick = () => openTaskForm(null);
+
+    // 局部重绘待办面板：增删改待办后调用，避免整页 reload 闪烁（L1）
+    async function renderTodo() {
+      tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
+      const parents = tasks.filter(t => !t.parentId);
+      const dueToday = parents.filter(t => !t.done && t.dueDate === todayKey);
+      const overdue = parents.filter(t => !t.done && t.dueDate && t.dueDate < todayKey);
+      const todo = overdue.concat(dueToday).sort((a, b) => (a.priority - b.priority) || (a.dueDate || '').localeCompare(b.dueDate || ''));
+      tl.innerHTML = todo.length ? todo.map(todoItemHTML).join('') : ui.emptyState('今天没有待办，太棒了 🎉');
+      const se1 = root.querySelector('#stat-todo'); if (se1) se1.textContent = todo.length;
+      const se2 = root.querySelector('#stat-overdue'); if (se2) { se2.textContent = overdue.length; se2.classList.toggle('neg', !!overdue.length); }
+    }
 
     // 习惯打卡
     root.querySelector('#habits').addEventListener('click', async e => {
@@ -190,7 +202,7 @@
             const obj = { id: store.uid(), createdAt: Date.now(), title,
               priority: p ? p.priority : 2, dueDate: p ? p.dueDate : ui.fmtDate(Date.now()),
               parentId: parentId || undefined, tags: [], note: '' };
-            await store.put('tasks', obj); close(); WB.app.reload();
+            await store.put('tasks', obj); close(); await renderTodo();
           } }
         ]
       });
@@ -210,7 +222,7 @@
             obj.dueDate = m.dialog.querySelector('#f-due').value || ui.fmtDate(Date.now());
             obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
             obj.note = m.dialog.querySelector('#f-note').value;
-            await store.put('tasks', obj); close(); WB.app.reload();
+            await store.put('tasks', obj); close(); await renderTodo();
           } }
         ]
       });
