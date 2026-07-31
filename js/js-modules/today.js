@@ -116,7 +116,7 @@
 
     root.innerHTML = `
       <div class="page">
-        <div class="page-head"><div><h1>📌 今日</h1><div class="muted" style="font-size:13px">${greet}，${dateStr}</div><div class="muted" style="font-size:13px;margin-top:2px">${todo.length} 项待办 · ${habitDone}/${habits.length} 习惯已打卡 · 本月结余 ${(income - expense).toFixed(2)}</div></div></div>
+        ${ui.pageHead('home', '今日', { subtitle: escapeHtml(greet) + '，' + dateStr + '<div class="muted" style="margin-top:2px">' + todo.length + ' 项待办 · ' + habitDone + '/' + habits.length + ' 习惯已打卡 · 本月结余 ' + (income - expense).toFixed(2) + '</div>' })}
         <div class="stat-row">
           <div class="stat"><div class="stat-num">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
           <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}">${overdue.length}</div><div class="stat-label">已逾期</div></div>
