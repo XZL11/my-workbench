@@ -257,8 +257,8 @@ button { font-family: inherit; cursor: pointer; }
   }
   #app.drawer-open .sidebar { transform: translateX(0); box-shadow: 0 0 30px rgba(0,0,0,.3); }
   #app.drawer-open .backdrop { display: block; }
-  .bottomtabs { display: flex; }
-  .view { padding: 14px 12px calc(14px + var(--tabbar-h)); }
+  .bottomtabs { display: none; }   /* 移动端改为左侧抽屉导航，移除底部常驻 Tab */
+  .view { padding: 14px 12px; }
 }
 @media (min-width: 768px) {
   .menu-toggle { display: none; }
