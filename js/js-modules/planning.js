@@ -27,10 +27,7 @@
     let all = (await store.getAll('planning')).filter(i => !i._deleted);
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>🎯 长期规划</h1>
-          <button class="btn primary" id="add">+ 新建</button>
-        </div>
+        ${ui.pageHead('target', '长期规划', { actions: '<button class="btn primary" id="add">+ 新建</button>' })}
         <div class="filters" id="filters">
           <button class="chip active" data-f="all">全部</button>
           ${Object.keys(TYPE).map(k => `<button class="chip" data-f="${k}">${TYPE[k]}</button>`).join('')}
@@ -50,7 +47,7 @@
             <div class="plan-meta">
               <span class="badge">${TYPE[p.type] || '目标'}</span>
               <span class="badge st-${p.status}">${STATUS[p.status] || '待启动'}</span>
-              ${p.dueDate ? '<span class="muted">📅 ' + ui.escapeHtml(p.dueDate) + '</span>' : ''}
+              ${p.dueDate ? '<span class="muted">' + ui.escapeHtml(p.dueDate) + '</span>' : ''}
             </div>
             ${p.note ? '<div class="muted plan-note">' + ui.escapeHtml(p.note) + '</div>' : ''}
           </div>
