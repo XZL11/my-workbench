@@ -64,10 +64,7 @@
 
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>📅 日程安排</h1>
-          <button class="btn primary" id="add">+ 待办</button>
-        </div>
+        ${ui.pageHead('calendar', '日程安排', { actions: '<button class="btn primary" id="add">+ 待办</button>' })}
         <div class="cal-nav">
           <button class="btn ghost" id="prev">‹</button>
           <button class="btn ghost" id="today">今天</button>
@@ -188,9 +185,9 @@
         </div>`).join('') : ui.emptyState('这一天没有记账');
 
       root.querySelector('#dd-content').innerHTML = `
-        <div class="dd-sec"><div class="dd-sec-head"><h2>📋 当日待办</h2><button class="btn ghost sm" data-add="task">+ 待办</button></div><div id="dd-task">${dayHTML}</div></div>
-        <div class="dd-sec"><div class="dd-sec-head"><h2>🔥 习惯打卡</h2></div><div id="dd-habit">${habitHTML}</div></div>
-        <div class="dd-sec"><div class="dd-sec-head"><h2>💰 记账</h2></div><div id="dd-fin">${finHTML}</div></div>`;
+        <div class="dd-sec"><div class="dd-sec-head"><h2>当日待办</h2><button class="btn ghost sm" data-add="task">+ 待办</button></div><div id="dd-task">${dayHTML}</div></div>
+        <div class="dd-sec"><div class="dd-sec-head"><h2>习惯打卡</h2></div><div id="dd-habit">${habitHTML}</div></div>
+        <div class="dd-sec"><div class="dd-sec-head"><h2>记账</h2></div><div id="dd-fin">${finHTML}</div></div>`;
     }
 
     // 日详情内部交互（事件委托，仅绑定一次）
