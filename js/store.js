@@ -53,6 +53,14 @@
   function afterWrite() {
     if (!_suppressSync && WB.app && WB.app.scheduleSync) WB.app.scheduleSync();
   }
+  // L2 数据订阅：写操作后通知视图订阅者，避免散落 reload
+  let _subs = {};
+  function subscribe(name, cb) {
+    (_subs[name] = _subs[name] || new Set()).add(cb);
+    return () => { if (_subs[name]) _subs[name].delete(cb); };
+  }
+  function notify(name) { if (_subs[name]) _subs[name].forEach(cb => { try { cb(); } catch (e) {} }); }
+  function clearSubs() { _subs = {}; }
   async function put(store, item) {
     if (store !== 'meta' && item && item.id) {
       item.updatedAt = Math.max(item.updatedAt || 0, Date.now());
@@ -60,6 +68,7 @@
     const os = await _tx(store, 'readwrite');
     await _p(os.put(item));
     afterWrite();
+    notify(store);
     return item;
   }
   async function bulkPut(store, items) {
@@ -70,6 +79,7 @@
       os.put(it);
     }
     afterWrite();
+    notify(store);
     return new Promise((res, rej) => {
       tx.oncomplete = () => res(items);
       tx.onerror = () => rej(tx.error);
@@ -89,6 +99,7 @@
     const os = await _tx(store, 'readwrite');
     await _p(os.put(item));
     afterWrite();
+    notify(store);
   }
   async function hardDelete(store, id) {
     const os = await _tx(store, 'readwrite');
@@ -111,6 +122,7 @@
   WB.store = {
     open, getAll, get, put, bulkPut, remove, hardDelete, clear,
     getMeta, setMeta, uid, STORES, SYNC_STORES, DB_NAME,
+    subscribe, clearSubs,
     setSuppressSync(v) { _suppressSync = !!v; }
   };
 })(window.WB = window.WB || {});
