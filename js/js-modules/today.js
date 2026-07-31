@@ -33,7 +33,6 @@
     const planning = (await store.getAll('planning')).filter(i => !i._deleted);
     const notes = (await store.getAll('notes')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
     const bookmarks = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
-    const calendar = (await store.getAll('calendar')).filter(i => !i._deleted);
 
     const parents = tasks.filter(t => !t.parentId);
     const childrenOf = pid => tasks.filter(t => t.parentId === pid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -104,12 +103,6 @@
       <span class="chip">✅ 已发布 ${cStat.published}</span>
     </div>`;
     const planningHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
-    const todayEvents = calendar.filter(e => (e.startDate || '') === todayKey).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
-    const scheduleHTML = todayEvents.length ? todayEvents.map(e => `
-      <div class="sched-item" data-go="calendar">
-        <span class="sched-time">${ui.escapeHtml(e.startTime || '全天')}</span>
-        <span class="sched-title">${ui.escapeHtml(e.title)}</span>
-      </div>`).join('') : ui.emptyState('今日暂无定时日程');
 
     function panelHTML(picon, ptitle, pbody, pgo, pextra) {
       return `<section class="card panel">
@@ -133,7 +126,6 @@
         <div class="dash-grid">
           ${panelHTML('check', '今日待办', `<div id="todolist">${todoHTML}</div>`, 'tasks', '<button class="btn primary sm" id="add-task">+ 待办</button>')}
           ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '')}
-          ${panelHTML('calendar', '今日日程', scheduleHTML, 'calendar', '')}
           ${panelHTML('wallet', '收支速览', finHTML, 'finance', '')}
           ${panelHTML('pen', '内容创作', contentHTML, 'content', '')}
           ${panelHTML('target', '长期规划', planningHTML, 'planning', '')}
