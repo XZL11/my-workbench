@@ -45,10 +45,7 @@
     let all = (await store.getAll('notes')).filter(i => !i._deleted);
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>📝 笔记与知识库</h1>
-          <button class="btn primary" id="add">+ 新建</button>
-        </div>
+        ${ui.pageHead('note', '笔记与知识库', { actions: '<button class="btn primary" id="add">+ 新建</button>' })}
         <div class="toolbar">
           <input id="search" class="input" placeholder="🔍 搜索标题 / 内容 / 标签">
           <select id="typefilter" class="input">
