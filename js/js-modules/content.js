@@ -33,10 +33,7 @@
     let all = (await store.getAll('content')).filter(i => !i._deleted);
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>🎬 内容创作</h1>
-          <button class="btn primary" id="add">+ 新建</button>
-        </div>
+        ${ui.pageHead('pen', '内容创作', { actions: '<button class="btn primary" id="add">+ 新建</button>' })}
         <div class="toolbar">
           <select id="kfilter" class="input">
             <option value="all">全部类型</option>
