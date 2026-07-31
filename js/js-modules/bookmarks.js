@@ -15,7 +15,7 @@
   }
 
   async function render(root) {
-    const all = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.title.localeCompare(b.title));
+    let all = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.title.localeCompare(b.title));
     const cats = ['全部', ...Array.from(new Set(all.map(i => i.category || '未分类')))];
     root.innerHTML = `
       <div class="page">
@@ -35,12 +35,13 @@
             <div class="bm-meta"><span class="tag">${ui.escapeHtml(b.category || '未分类')}</span>${b.note ? '<span class="muted">' + ui.escapeHtml(b.note) + '</span>' : ''}</div>
           </div>
           <div class="row-actions">
-            <button class="icon-btn edit" title="编辑">✏️</button>
-            <button class="icon-btn del" title="删除">🗑️</button>
+            <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
+            <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
           </div>
         </div>`).join('');
     }
     paint('全部');
+    async function refresh() { all = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.title.localeCompare(b.title)); paint(); }
     root.querySelector('#filters').addEventListener('click', e => {
       if (!e.target.dataset.c) return;
       root.querySelectorAll('#filters .chip').forEach(c => c.classList.remove('active'));
@@ -61,7 +62,7 @@
             const obj = b ? Object.assign({}, b) : { id: store.uid() };
             obj.title = title; obj.url = url; obj.category = m.dialog.querySelector('#f-cat').value.trim();
             obj.note = m.dialog.querySelector('#f-note').value;
-            await store.put('bookmarks', obj); close(); WB.app.reload();
+            await store.put('bookmarks', obj); close(); await refresh();
           } }
         ]
       });
@@ -73,7 +74,7 @@
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('bookmarks', id)); return; }
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该书签？')) { await store.remove('bookmarks', id); WB.app.reload(); } }
+      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该书签？')) { await store.remove('bookmarks', id); await refresh(); } }
     });
   }
 
