@@ -150,7 +150,7 @@ button { font-family: inherit; cursor: pointer; }
 .habit { --hc: var(--primary); }
 .habit-check { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--hc);
   background: transparent; font-size: 20px; flex: 0 0 auto; display: grid; place-items: center; }
-.habit-check.on { background: var(--hc); }
+.habit-check.on { background: var(--hc); color: #fff; }
 .habit-main { flex: 1; min-width: 0; }
 .habit-name { font-weight: 600; }
 .habit-meta { font-size: 13px; color: var(--muted); margin: 2px 0 6px; }
@@ -803,6 +803,10 @@ body {
   gap: 16px;
   align-items: start;
 }
+/* 今日待办面板占满整行；内部待办改为响应式两列，卡片不再被挤成小格子也不会无限拉宽 */
+.dash-grid .panel-wide { grid-column: 1 / -1; }
+#todolist { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+#todolist .empty { grid-column: 1 / -1; }
 
 /* 面板复用 .card 玻璃底，覆盖其行向 flex，改为纵向堆叠 */
 .panel {
