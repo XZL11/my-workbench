@@ -28,7 +28,7 @@
     }, 2600);
   }
 
-  // 模态框：openModal({title, html, actions:[{label, primary, onClick(close)}]}) -> {close}
+  // 模态框：openModal({title, html, actions:[{label, primary, danger, onClick(close)}], onDismiss, dismissable}) -> {close, dialog}
   function openModal(opts) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -41,7 +41,31 @@
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
     const foot = dialog.querySelector('.modal-foot');
-    function close() { overlay.remove(); }
+    let closed = false;
+    function focusables() {
+      return Array.from(dialog.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'));
+    }
+    function close() {
+      if (closed) return;
+      closed = true;
+      document.removeEventListener('keydown', onKey, true);
+      document.body.style.overflow = ''; // 恢复背景滚动
+      overlay.remove();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        if (opts.dismissable === false) return; // 不可关闭的弹窗忽略 Esc
+        if (opts.onDismiss) opts.onDismiss();
+        close();
+      } else if (e.key === 'Tab') {
+        // focus trap：Tab 在弹窗内循环
+        const f = focusables();
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
     (opts.actions || []).forEach(a => {
       const btn = document.createElement('button');
       btn.className = 'btn ' + (a.primary ? 'primary' : (a.danger ? 'danger' : 'ghost'));
@@ -54,6 +78,9 @@
     });
     setTimeout(() => overlay.classList.add('show'), 10);
     overlay.addEventListener('click', (e) => { if (e.target === overlay && opts.dismissable !== false) { if (opts.onDismiss) opts.onDismiss(); close(); } });
+    document.addEventListener('keydown', onKey, true); // Esc 关闭 + focus trap
+    document.body.style.overflow = 'hidden'; // 打开时锁定背景滚动
+    setTimeout(() => { const f = focusables(); if (f.length) f[0].focus(); }, 60); // 聚焦首个可交互元素
     return { close, dialog };
   }
 
