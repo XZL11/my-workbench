@@ -9,7 +9,7 @@
       <div class="form">
         <div class="row">
           <label style="flex:1">图标<input id="f-emoji" class="input" value="${ui.escapeHtml(h.emoji || '⭐')}" maxlength="8"></label>
-          <label style="flex:3">名称<input id="f-name" class="input" value="${ui.escapeHtml(h.name || '')}" placeholder="如：读书 30 分钟"></label>
+          <label style="flex:3">名称<input id="f-name" class="input" data-required value="${ui.escapeHtml(h.name || '')}" placeholder="如：读书 30 分钟"></label>
         </div>
         <div class="row">
           <label style="flex:1">频率<select id="f-freq" class="input">
@@ -43,8 +43,9 @@
   async function render(root) {
     const habits = (await store.getAll('habits')).filter(i => !i._deleted);
     const logs = (await store.getAll('habitlogs')).filter(i => !i._deleted);
-    const logMap = {};
-    logs.forEach(l => { logMap[l.habitId + ':' + l.date] = l; });
+    let logMap = {};
+    function buildLogMap() { logMap = {}; logs.forEach(l => { logMap[l.habitId + ':' + l.date] = l; }); }
+    buildLogMap();
     const days = lastNDays(7);
     const todayKey = ui.fmtDate(Date.now());
 
@@ -56,7 +57,7 @@
     const list = root.querySelector('#list');
 
     function paint() {
-      if (!habits.length) { list.innerHTML = ui.emptyState('还没有习惯，点击新建开始坚持一件事'); return; }
+      if (!habits.length) { list.innerHTML = ui.emptyState('还没有习惯，点击新建开始坚持一件事', { action: { label: '新建习惯' } }); bindEmpty(); return; }
       list.innerHTML = habits.map(h => {
         const doneToday = logMap[h.id + ':' + todayKey] && logMap[h.id + ':' + todayKey].done;
         const weekDone = days.filter(d => logMap[h.id + ':' + d] && logMap[h.id + ':' + d].done).length;
@@ -79,6 +80,17 @@
             </div>
           </div>`;
       }).join('');
+      bindEmpty();
+    }
+    function bindEmpty() {
+      const ea = list.querySelector('#empty-add');
+      if (ea) ea.onclick = () => openForm(null);
+    }
+    async function refresh() {
+      habits = (await store.getAll('habits')).filter(i => !i._deleted);
+      const nl = (await store.getAll('habitlogs')).filter(i => !i._deleted);
+      logs.length = 0; nl.forEach(l => logs.push(l));
+      buildLogMap(); paint();
     }
     function logMapFor(hid) {
       const m = {};
@@ -109,18 +121,15 @@
             if (!name) { ui.toast('请填写名称', 'warn'); return; }
             h.name = name; h.emoji = m.dialog.querySelector('#f-emoji').value || '⭐';
             h.freq = m.dialog.querySelector('#f-freq').value; h.target = parseInt(m.dialog.querySelector('#f-target').value, 10) || 7;
-            h.color = m.dialog.querySelector('#f-color').value; await store.put('habits', h); close(); WB.app.reload();
+            h.color = m.dialog.querySelector('#f-color').value; await store.put('habits', h); close(); await refresh();
           } }]
         });
+        ui.bindFormValidation(m.dialog);
         return;
       }
       if (e.target.closest('.icon-btn.del')) {
-        if (await ui.confirm('删除该习惯？相关打卡记录也会删除。')) {
-          await store.remove('habits', id);
-          const keys = Object.keys(logMap).filter(k => k.startsWith(id + ':'));
-          await Promise.all(keys.map(k => store.remove('habitlogs', k)));
-          WB.app.reload();
-        }
+        const childIds = Object.keys(logMap).filter(k => k.startsWith(id + ':')).map(k => ({ store: 'habitlogs', id: k }));
+        ui.trashRecords([{ store: 'habits', id: id }, ...childIds], { label: '已删除习惯', repaint: refresh });
       }
     });
 
@@ -133,10 +142,11 @@
           const obj = { id: store.uid(), name, emoji: m.dialog.querySelector('#f-emoji').value || '⭐',
             freq: m.dialog.querySelector('#f-freq').value, target: parseInt(m.dialog.querySelector('#f-target').value, 10) || 7,
             color: m.dialog.querySelector('#f-color').value, createdAt: Date.now() };
-          await store.put('habits', obj); close(); WB.app.reload();
-        } }]
-      });
-    };
+          await store.put('habits', obj); close(); await refresh();
+          } }]
+        });
+        ui.bindFormValidation(m.dialog);
+      };
   }
 
   WB.modules.push({ id: 'habits', title: '习惯', icon: 'flame', render });
