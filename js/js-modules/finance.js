@@ -4,24 +4,16 @@
   const store = WB.store, ui = WB.ui;
   const CATS = ['餐饮', '交通', '购物', '居住', '娱乐', '医疗', '教育', '工资', '理财', '其他'];
 
-  function formHTML(f) {
+  function formFields(f) {
     f = f || {};
-    return `
-      <div class="form">
-        <div class="row">
-          <label style="flex:1">类型<select id="f-type" class="input">
-            <option value="expense" ${f.type !== 'income' ? 'selected' : ''}>支出</option>
-            <option value="income" ${f.type === 'income' ? 'selected' : ''}>收入</option>
-          </select></label>
-          <label style="flex:1">金额<input id="f-amount" class="input" type="number" step="0.01" value="${f.amount || ''}" placeholder="0.00"></label>
-        </div>
-        <div class="row">
-          <label style="flex:1">分类<select id="f-cat" class="input">${CATS.map(c => `<option ${f.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-          <label style="flex:1">日期<input id="f-date" class="input" type="date" value="${f.date || ui.fmtDate(Date.now())}"></label>
-        </div>
-        <label class="checkline"><input type="checkbox" id="f-fixed" ${f.fixed ? 'checked' : ''}> 标记为固定成本（计入「固定月成本」统计）</label>
-        <label>备注<input id="f-note" class="input" value="${ui.escapeHtml(f.note || '')}"></label>
-      </div>`;
+    return [
+      { name: 'type', label: '类型', type: 'select', value: f.type, row: 'a', options: [{ value: 'expense', label: '支出' }, { value: 'income', label: '收入' }] },
+      { name: 'amount', label: '金额', type: 'number', value: f.amount || '', placeholder: '0.00', required: true, pattern: '^\\d+(\\.\\d+)?$', err: '请输入有效金额', row: 'a' },
+      { name: 'cat', label: '分类', type: 'select', value: f.category, row: 'b', options: CATS.map(c => ({ value: c, label: c })) },
+      { name: 'date', label: '日期', type: 'date', value: f.date || ui.fmtDate(Date.now()), row: 'b' },
+      { name: 'fixed', label: '标记为固定成本（计入「固定月成本」统计）', type: 'checkbox', value: f.fixed },
+      { name: 'note', label: '备注', value: f.note || '' }
+    ];
   }
 
   async function render(root) {
@@ -103,7 +95,7 @@
       if (f === 'income') view = view.filter(i => i.type === 'income');
       if (f === 'fixed') view = view.filter(i => i.fixed);
       view = view.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.updatedAt || 0) - (a.updatedAt || 0));
-      if (!view.length) { list.innerHTML = ui.emptyState('本月还没有记账'); return; }
+      if (!view.length) { list.innerHTML = ui.emptyState('本月还没有记账', { action: { label: '记一笔' } }); bindEmpty(); return; }
       list.innerHTML = view.map(r => `
         <div class="card fin ${r.type}" data-id="${r.id}">
           <div class="fin-amt ${r.type}">${r.type === 'income' ? '+' : '-'}${(+r.amount || 0).toFixed(2)}</div>
@@ -115,7 +107,12 @@
             <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
             <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
           </div>
-        </div>`).join('');
+        </div>      `).join('');
+      bindEmpty();
+    }
+    function bindEmpty() {
+      const ea = list.querySelector('#empty-add');
+      if (ea) ea.onclick = () => openForm(null);
     }
     paint('all');
     async function refresh() { all = (await store.getAll('finance')).filter(i => !i._deleted); paint(); }
@@ -127,7 +124,7 @@
 
     function openForm(f) {
       const m = ui.openModal({
-        title: f ? '编辑记录' : '记一笔', html: formHTML(f),
+        title: f ? '编辑记录' : '记一笔', html: ui.form(formFields(f)),
         actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
           const amount = parseFloat(m.dialog.querySelector('#f-amount').value);
           if (isNaN(amount) || amount <= 0) { ui.toast('请输入有效金额', 'warn'); return; }
@@ -140,6 +137,7 @@
           await store.put('finance', obj); close(); await refresh();
         } }]
       });
+      ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-amount').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
@@ -147,7 +145,7 @@
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('finance', id)); return; }
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该记录？')) { await store.remove('finance', id); await refresh(); } }
+      if (e.target.closest('.icon-btn.del')) { ui.trash('finance', id, { label: '已删除记录', repaint: refresh }); }
     });
   }
 
