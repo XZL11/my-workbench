@@ -51,10 +51,10 @@
             </div>
             ${p.note ? '<div class="muted plan-note">' + ui.escapeHtml(p.note) + '</div>' : ''}
           </div>
-          <div class="row-actions">
-            <button class="icon-btn edit" title="编辑">✏️</button>
-            <button class="icon-btn del" title="删除">🗑️</button>
-          </div>
+            <div class="row-actions">
+              <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
+              <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
+            </div>
         </div>`).join('');
     }
     paint('all');
