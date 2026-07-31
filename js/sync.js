@@ -161,12 +161,20 @@
     const remote = await getFile('data/' + name + '.json');
     if (!remote) {
       await putFile('data/' + name + '.json', local, null);
-      return local.length;
+      return { count: local.length, pulled: 0 };
     }
+    // L6：统计云端胜出的更新项（远端 updatedAt 更新且非删除态），用于合并提示
+    const localMap = new Map(local.map(i => [i.id, i]));
+    let pulled = 0;
+    (remote.items || []).forEach(r => {
+      if (!r || !r.id || r._deleted) return;
+      const l = localMap.get(r.id);
+      if (!l || (r.updatedAt || 0) > (l.updatedAt || 0)) pulled++;
+    });
     const merged = mergeArrays(local, remote.items);
     await store.bulkPut(name, merged);
     await putFile('data/' + name + '.json', merged, remote.sha);
-    return merged.length;
+    return { count: merged.length, pulled };
   }
 
   let _syncPromise = null;
@@ -175,12 +183,15 @@
     _syncPromise = (async () => {
       const results = {};
       const errors = [];
+      let pulledTotal = 0;
       store.setSuppressSync(true); // 同步内部的写操作不要再次触发自动同步
       try {
         for (const name of store.SYNC_STORES) {
           try {
             if (onProgress) onProgress('同步 ' + name + ' …');
-            results[name] = await syncModule(name);
+            const r = await syncModule(name);
+            results[name] = r.count;
+            pulledTotal += r.pulled;
           } catch (e) {
             errors.push(name + '：' + e.message);
           }
@@ -190,7 +201,7 @@
         store.setSuppressSync(false);
       }
       if (errors.length) throw new Error('部分模块同步失败 — ' + errors.join('；'));
-      return results;
+      return { results, pulled: pulledTotal };
     })();
     try { return await _syncPromise; } finally { _syncPromise = null; }
   }
