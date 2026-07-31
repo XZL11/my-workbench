@@ -141,8 +141,22 @@
     await store.setMeta('theme', t);
   }
 
+  function pageHead(icon, title, opts) {
+    opts = opts || {};
+    const actions = opts.actions || '';
+    const subtitle = opts.subtitle || '';
+    const ic = (WB.ui.icon && icon) ? WB.ui.icon(icon, 22) : '';
+    return '<div class="page-head">' +
+      '<div class="page-head-ic">' + ic + '</div>' +
+      '<div class="page-head-main"><h1>' + escapeHtml(title) + '</h1>' +
+      (subtitle ? '<div class="page-head-sub">' + subtitle + '</div>' : '') +
+      '</div>' +
+      (actions ? '<div class="page-head-actions">' + actions + '</div>' : '') +
+      '</div>';
+  }
+
   WB.ui = {
-    escapeHtml, toast, openModal, confirm,
+    escapeHtml, toast, openModal, confirm, pageHead,
     fmtDate, fmtDateTime, fmtRelative, mdLite, emptyState,
     initTheme, applyTheme, setTheme
   };
