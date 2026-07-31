@@ -171,7 +171,7 @@
       const habitHTML = habits.length ? habits.map(h => {
         const rec = logMap[h.id + ':' + dateKey]; const done = rec && rec.done;
         return `<div class="dd-item habit" data-id="${h.id}">
-          <button class="habit-check ${done ? 'on' : ''}" data-id="${h.id}" style="--hc:${ui.escapeHtml(h.color || '#4f46e5')}">${ui.escapeHtml(h.emoji || '⭐')}</button>
+          <button class="habit-check ${done ? 'on' : ''}" data-id="${h.id}" style="--hc:${ui.escapeHtml(h.color || '#4f46e5')}">${done ? ui.icon('check', 16) : ''}</button>
           <div class="dd-body"><div class="dd-title">${ui.escapeHtml(h.name)}</div><div class="muted">${done ? '已打卡' : '点击打卡'}</div></div>
         </div>`;
       }).join('') : ui.emptyState('还没有习惯');
