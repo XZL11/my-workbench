@@ -790,3 +790,75 @@ body {
   }
 }
 
+/* ============================================================
+   今日聚合仪表盘（网格面板）· 与苹果真毛玻璃风格统一
+   ============================================================ */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+/* 面板复用 .card 玻璃底，覆盖其行向 flex，改为纵向堆叠 */
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 16px;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 0;
+}
+.panel-title .pi { color: var(--primary); display: inline-flex; flex: 0 0 auto; }
+.panel-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.panel-body { display: flex; flex-direction: column; gap: 10px; }
+
+/* 面板入场 stagger（每面板延迟 40ms，总时长 ≤ 500ms） */
+.dash-grid > .panel { animation: panelIn .5s cubic-bezier(.16, 1, .3, 1) both; }
+.dash-grid > .panel:nth-child(1) { animation-delay: .00s; }
+.dash-grid > .panel:nth-child(2) { animation-delay: .04s; }
+.dash-grid > .panel:nth-child(3) { animation-delay: .08s; }
+.dash-grid > .panel:nth-child(4) { animation-delay: .12s; }
+.dash-grid > .panel:nth-child(5) { animation-delay: .16s; }
+.dash-grid > .panel:nth-child(6) { animation-delay: .20s; }
+.dash-grid > .panel:nth-child(7) { animation-delay: .24s; }
+.dash-grid > .panel:nth-child(8) { animation-delay: .28s; }
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 今日日程条目 */
+.sched-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  border-radius: 10px; background: var(--surface-2);
+  cursor: pointer; transition: background .15s ease, transform .15s ease;
+}
+.sched-item:hover { background: var(--primary-weak); transform: translateY(-1px); }
+.sched-time { font-weight: 600; color: var(--primary); font-size: 13px; flex: 0 0 auto; width: 48px; }
+.sched-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 窄屏：网格收窄为单列堆叠 */
+@media (max-width: 560px) {
+  .dash-grid { grid-template-columns: 1fr; gap: 12px; }
+}
+
+/* 减少动态效果：关闭面板入场位移 */
+@media (prefers-reduced-motion: reduce) {
+  .dash-grid > .panel { animation: none !important; }
+}
+
