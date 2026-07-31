@@ -7,10 +7,7 @@
     h = h || {};
     return `
       <div class="form">
-        <div class="row">
-          <label style="flex:1">图标<input id="f-emoji" class="input" value="${ui.escapeHtml(h.emoji || '⭐')}" maxlength="8"></label>
-          <label style="flex:3">名称<input id="f-name" class="input" data-required value="${ui.escapeHtml(h.name || '')}" placeholder="如：读书 30 分钟"></label>
-        </div>
+        <label>名称<input id="f-name" class="input" data-required value="${ui.escapeHtml(h.name || '')}" placeholder="如：读书 30 分钟"></label>
         <div class="row">
           <label style="flex:1">频率<select id="f-freq" class="input">
             <option value="daily" ${h.freq !== 'weekly' ? 'selected' : ''}>每天</option>
@@ -68,10 +65,10 @@
         }).join('');
         return `
           <div class="card habit" data-id="${h.id}" style="--hc:${ui.escapeHtml(h.color || '#4f46e5')}">
-            <button class="habit-check ${doneToday ? 'on' : ''}" data-id="${h.id}">${h.emoji || '⭐'}</button>
+            <button class="habit-check ${doneToday ? 'on' : ''}" data-id="${h.id}">${doneToday ? ui.icon('check', 16) : ''}</button>
             <div class="habit-main">
               <div class="habit-name">${ui.escapeHtml(h.name)}</div>
-              <div class="habit-meta">🔥 连续 ${streak(logMapFor(h.id))} 天 ${wk}</div>
+              <div class="habit-meta">连续 ${streak(logMapFor(h.id))} 天 ${wk}</div>
               <div class="week">${week}</div>
             </div>
             <div class="row-actions">
@@ -119,7 +116,7 @@
           actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
             const name = m.dialog.querySelector('#f-name').value.trim();
             if (!name) { ui.toast('请填写名称', 'warn'); return; }
-            h.name = name; h.emoji = m.dialog.querySelector('#f-emoji').value || '⭐';
+            h.name = name;
             h.freq = m.dialog.querySelector('#f-freq').value; h.target = parseInt(m.dialog.querySelector('#f-target').value, 10) || 7;
             h.color = m.dialog.querySelector('#f-color').value; await store.put('habits', h); close(); await refresh();
           } }]
@@ -139,7 +136,7 @@
         actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
           const name = m.dialog.querySelector('#f-name').value.trim();
           if (!name) { ui.toast('请填写名称', 'warn'); return; }
-          const obj = { id: store.uid(), name, emoji: m.dialog.querySelector('#f-emoji').value || '⭐',
+          const obj = { id: store.uid(), name,
             freq: m.dialog.querySelector('#f-freq').value, target: parseInt(m.dialog.querySelector('#f-target').value, 10) || 7,
             color: m.dialog.querySelector('#f-color').value, createdAt: Date.now() };
           await store.put('habits', obj); close(); await refresh();
