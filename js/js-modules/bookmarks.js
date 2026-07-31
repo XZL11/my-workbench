@@ -3,15 +3,14 @@
   'use strict';
   const store = WB.store, ui = WB.ui;
 
-  function formHTML(b) {
+  function formFields(b) {
     b = b || {};
-    return `
-      <div class="form">
-        <label>标题<input id="f-title" class="input" value="${ui.escapeHtml(b.title || '')}" placeholder="网站名称"></label>
-        <label>链接<input id="f-url" class="input" value="${ui.escapeHtml(b.url || '')}" placeholder="https://..."></label>
-        <label>分类<input id="f-cat" class="input" value="${ui.escapeHtml(b.category || '')}" placeholder="如：工具 / 阅读"></label>
-        <label>备注<textarea id="f-note" class="input" rows="2">${ui.escapeHtml(b.note || '')}</textarea></label>
-      </div>`;
+    return [
+      { name: 'title', label: '标题', value: b.title || '', placeholder: '网站名称', required: true },
+      { name: 'url', label: '链接', value: b.url || '', placeholder: 'https://...' },
+      { name: 'cat', label: '分类', value: b.category || '', placeholder: '如：工具 / 阅读' },
+      { name: 'note', label: '备注', type: 'textarea', value: b.note || '' }
+    ];
   }
 
   async function render(root) {
@@ -26,7 +25,7 @@
     const list = root.querySelector('#list');
     function paint(cat) {
       const view = cat === '全部' ? all : all.filter(i => (i.category || '未分类') === cat);
-      if (!view.length) { list.innerHTML = ui.emptyState('暂无书签'); return; }
+      if (!view.length) { list.innerHTML = ui.emptyState('暂无书签', { action: { label: '新建书签' } }); bindEmpty(); return; }
       list.innerHTML = view.map(b => `
         <div class="card bm" data-id="${b.id}">
           <div class="bm-fav">${ui.escapeHtml((b.title || '?').slice(0, 1))}</div>
@@ -38,7 +37,12 @@
             <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
             <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
           </div>
-        </div>`).join('');
+        </div>      `).join('');
+      bindEmpty();
+    }
+    function bindEmpty() {
+      const ea = list.querySelector('#empty-add');
+      if (ea) ea.onclick = () => openForm(null);
     }
     paint('全部');
     async function refresh() { all = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.title.localeCompare(b.title)); paint(); }
@@ -51,7 +55,7 @@
     function openForm(b) {
       const m = ui.openModal({
         title: b ? '编辑书签' : '新建书签',
-        html: formHTML(b),
+        html: ui.form(formFields(b)),
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -66,6 +70,7 @@
           } }
         ]
       });
+      ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
@@ -74,7 +79,7 @@
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('bookmarks', id)); return; }
-      if (e.target.closest('.icon-btn.del')) { if (await ui.confirm('删除该书签？')) { await store.remove('bookmarks', id); await refresh(); } }
+      if (e.target.closest('.icon-btn.del')) { ui.trash('bookmarks', id, { label: '已删除书签', repaint: refresh }); }
     });
   }
 
