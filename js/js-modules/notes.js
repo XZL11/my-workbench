@@ -86,7 +86,7 @@
     function openForm(n) {
       const m = ui.openModal({
         title: n ? '编辑' : '新建笔记',
-        html: ui.form(formFields(n)) + '<div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml(n.body || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
+        html: ui.form(formFields(n)) + '<div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml((n && n.body) || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
