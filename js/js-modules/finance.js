@@ -73,10 +73,7 @@
 
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>💰 记账与成本</h1>
-          <button class="btn primary" id="add">+ 记一笔</button>
-        </div>
+        ${ui.pageHead('wallet', '记账与成本', { actions: '<button class="btn primary" id="add">+ 记一笔</button>' })}
         <div class="stat-row">
           <div class="stat"><div class="stat-num">${income.toFixed(2)}</div><div class="stat-label">本月收入</div></div>
           <div class="stat"><div class="stat-num">${expense.toFixed(2)}</div><div class="stat-label">本月支出</div></div>
@@ -84,11 +81,11 @@
           <div class="stat"><div class="stat-num">${fixedSum.toFixed(2)}</div><div class="stat-label">固定月成本</div></div>
         </div>
         <section class="card section">
-          <h2>📊 本月支出分类</h2>
+          <h2>本月支出分类</h2>
           <div class="bars">${catBars}</div>
         </section>
         <section class="card section">
-          <h2>📈 近 6 个月收支趋势</h2>
+          <h2>近 6 个月收支趋势</h2>
           ${trendHTML}
         </section>
         <div class="filters" id="filters">
