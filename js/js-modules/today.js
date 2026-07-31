@@ -104,13 +104,13 @@
     </div>`;
     const planningHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
 
-    function panelHTML(picon, ptitle, pbody, pgo, pextra) {
+    function panelHTML(picon, ptitle, pbody, pgo, pextra, bodyId) {
       return `<section class="card panel">
         <div class="panel-head">
           <div class="panel-title"><span class="pi">${ui.icon(picon, 18)}</span>${ptitle}</div>
           <div class="panel-actions">${pextra || ''}<button class="btn ghost sm" data-go="${pgo}">查看全部</button></div>
         </div>
-        <div class="panel-body">${pbody}</div>
+        <div class="panel-body"${bodyId ? ' id="' + bodyId + '"' : ''}>${pbody}</div>
       </section>`;
     }
 
@@ -120,17 +120,17 @@
         <div class="stat-row">
           <div class="stat"><div class="stat-num" id="stat-todo">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
           <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}" id="stat-overdue">${overdue.length}</div><div class="stat-label">已逾期</div></div>
-          <div class="stat"><div class="stat-num">${(income - expense).toFixed(2)}</div><div class="stat-label">本月结余</div></div>
+          <div class="stat"><div class="stat-num" id="stat-balance">${(income - expense).toFixed(2)}</div><div class="stat-label">本月结余</div></div>
           <div class="stat"><div class="stat-num" id="stat-habit">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
         </div>
         <div class="dash-grid">
           ${panelHTML('check', '今日待办', `<div id="todolist">${todoHTML}</div>`, 'tasks', '<button class="btn primary sm" id="add-task">+ 待办</button>')}
-          ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '')}
-          ${panelHTML('wallet', '收支速览', finHTML, 'finance', '')}
-          ${panelHTML('pen', '内容创作', contentHTML, 'content', '')}
-          ${panelHTML('target', '长期规划', planningHTML, 'planning', '')}
-          ${panelHTML('note', '最近笔记', notesHTML, 'notes', '')}
-          ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '')}
+          ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '', 'p-habits')}
+          ${panelHTML('wallet', '收支速览', finHTML, 'finance', '', 'p-fin')}
+          ${panelHTML('pen', '内容创作', contentHTML, 'content', '', 'p-content')}
+          ${panelHTML('target', '长期规划', planningHTML, 'planning', '', 'p-planning')}
+          ${panelHTML('note', '最近笔记', notesHTML, 'notes', '', 'p-notes')}
+          ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '', 'p-bookmarks')}
         </div>
       </div>`;
 
@@ -146,13 +146,8 @@
         return;
       }
       if (e.target.closest('.icon-btn.del')) {
-        if (await ui.confirm(card.classList.contains('sub') ? '删除该子任务？' : '删除该待办及其子任务？')) {
-          await store.remove('tasks', id);
-          if (!card.classList.contains('sub')) {
-            for (const k of childrenOf(id)) await store.remove('tasks', k.id);
-          }
-          await renderTodo();
-        }
+        const childItems = card.classList.contains('sub') ? [] : childrenOf(id).map(k => ({ store: 'tasks', id: k.id }));
+        ui.trashRecords([{ store: 'tasks', id: id }, ...childItems], { label: card.classList.contains('sub') ? '已删除子任务' : '已删除待办', repaint: renderTodo });
         return;
       }
       if (!card.classList.contains('sub') && (e.target.closest('.icon-btn.edit') || e.target.closest('.task-main'))) {
@@ -228,6 +223,77 @@
       });
       if (!t) setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
+
+    // L2 数据订阅：任一数据源变更（含本页操作与云端同步）即增量重绘对应面板，无需整页 reload
+    async function liveRepaint(name) {
+      if (name === 'tasks') { await renderTodo(); return; }
+      if (name === 'habits' || name === 'habitlogs') {
+        const nh = (await store.getAll('habits')).filter(i => !i._deleted);
+        const nl = (await store.getAll('habitlogs')).filter(i => !i._deleted);
+        const lm = {}; nl.forEach(l => { if (l && l.id) lm[l.id] = l; });
+        const logFor2 = hid => { const m = {}; Object.keys(lm).forEach(k => { if (k.startsWith(hid + ':')) m[k.split(':').slice(1).join(':')] = lm[k]; }); return m; };
+        const total = nh.length;
+        const done = nh.filter(hh => { const m = logFor2(hh.id); return m[todayKey] && m[todayKey].done; }).length;
+        const body = root.querySelector('#p-habits');
+        if (body) body.innerHTML = total ? nh.map(hh => {
+          const m = logFor2(hh.id); const on = m[todayKey] && m[todayKey].done;
+          return `<div class="card habit" data-id="${hh.id}" style="--hc:${ui.escapeHtml(hh.color || '#4f46e5')}">
+            <button class="habit-check ${on ? 'on' : ''}" data-id="${hh.id}">${ui.escapeHtml(hh.emoji || '⭐')}</button>
+            <div class="habit-main"><div class="habit-name">${ui.escapeHtml(hh.name)}</div><div class="habit-meta">🔥 连续 ${streak(m)} 天</div></div>
+          </div>`;
+        }).join('') : ui.emptyState('还没有习惯，去「习惯」页添加');
+        const se = root.querySelector('#stat-habit'); if (se) se.textContent = done + '/' + total;
+        return;
+      }
+      if (name === 'finance') {
+        const allF = (await store.getAll('finance')).filter(i => !i._deleted);
+        const mi = allF.filter(i => (i.date || '').slice(0, 7) === todayKey.slice(0, 7));
+        const inc = mi.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
+        const exp = mi.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
+        const cm = {}; mi.filter(i => i.type === 'expense').forEach(i => { const c = i.category || '其他'; cm[c] = (cm[c] || 0) + (+i.amount || 0); });
+        const cr = Object.keys(cm).map(c => ({ label: c, value: cm[c] })).sort((a, b) => b.value - a.value).slice(0, 5);
+        const cmx = Math.max.apply(null, cr.map(r => r.value).concat([1]));
+        const bars = cr.length ? cr.map(r => `<div class="bar-row"><span class="bar-label">${ui.escapeHtml(r.label)}</span><div class="bar-track"><div class="bar-fill" style="width:${(r.value / cmx * 100).toFixed(1)}%"></div></div><span class="bar-val">${r.value.toFixed(2)}</span></div>`).join('') : '<span class="muted">本月暂无支出</span>';
+        const body = root.querySelector('#p-fin');
+        if (body) body.innerHTML = `<div class="bars">${bars}</div><div class="muted" style="margin-top:8px;font-size:13px">收入 ${inc.toFixed(2)} · 支出 ${exp.toFixed(2)} · 结余 ${(inc - exp).toFixed(2)}</div>`;
+        const se = root.querySelector('#stat-balance'); if (se) se.textContent = (inc - exp).toFixed(2);
+        return;
+      }
+      if (name === 'content') {
+        const allC = (await store.getAll('content')).filter(i => !i._deleted);
+        const cs = { idea: 0, draft: 0, review: 0, published: 0 };
+        allC.forEach(c => { cs[c.status] = (cs[c.status] || 0) + 1; });
+        const body = root.querySelector('#p-content');
+        if (body) body.innerHTML = `<div class="chips">
+          <span class="chip">💡 灵感 ${cs.idea}</span>
+          <span class="chip">✍️ 草稿 ${cs.draft}</span>
+          <span class="chip">👀 待审 ${cs.review}</span>
+          <span class="chip">✅ 已发布 ${cs.published}</span>
+        </div>`;
+        return;
+      }
+      if (name === 'planning') {
+        const allP = (await store.getAll('planning')).filter(i => !i._deleted);
+        const goals = allP.filter(p => p.type === 'goal' && p.status !== 'done').length;
+        const ms = allP.filter(p => p.type === 'milestone' && p.status !== 'done' && p.dueDate).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+        const body = root.querySelector('#p-planning');
+        if (body) body.innerHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
+        return;
+      }
+      if (name === 'notes') {
+        const allN = (await store.getAll('notes')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
+        const body = root.querySelector('#p-notes');
+        if (body) body.innerHTML = allN.length ? allN.map(n => `<div class="card note-mini" data-go="notes"><div class="nm-title">${ui.escapeHtml(n.title || '无标题')}</div><div class="muted" style="font-size:12px">${ui.fmtRelative(n.updatedAt)}</div></div>`).join('') : ui.emptyState('暂无笔记');
+        return;
+      }
+      if (name === 'bookmarks') {
+        const allB = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
+        const body = root.querySelector('#p-bookmarks');
+        if (body) body.innerHTML = allB.length ? allB.map(b => `<a class="card bm-mini" href="${ui.escapeHtml(b.url)}" target="_blank" rel="noopener"><div class="bm-mini-title">${ui.escapeHtml(b.title)}</div><div class="muted" style="font-size:12px">${ui.escapeHtml(b.category || '未分类')}</div></a>`).join('') : ui.emptyState('暂无书签');
+        return;
+      }
+    }
+    ['tasks', 'habits', 'habitlogs', 'finance', 'content', 'planning', 'notes', 'bookmarks'].forEach(name => store.subscribe(name, () => liveRepaint(name)));
   }
 
   WB.modules.unshift({ id: 'today', title: '今日', icon: 'home', render });
