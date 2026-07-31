@@ -22,7 +22,7 @@
 
     root.innerHTML = `
       <div class="page">
-        <div class="page-head"><h1>⚙️ 设置</h1></div>
+        ${ui.pageHead('settings', '设置')}
 
         <section class="card section">
           <h2>数据同步</h2>
