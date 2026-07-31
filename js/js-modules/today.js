@@ -70,7 +70,7 @@
           <div class="task-main"><div class="task-title">${ui.escapeHtml(s.title)}</div></div>
           <div class="row-actions"><button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button></div>
         </div>`).join('') + `<div class="card task addsub" data-parent="${t.id}">+ 添加子任务</div></div>` : '';
-      return `
+      return `<div class="task-group">
         <div class="card task ${t.done ? 'done' : ''}" data-id="${t.id}">
           <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
           <div class="task-main">
@@ -78,15 +78,15 @@
             <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span>${t.dueDate < todayKey ? '<span class="due over">逾期 ' + ui.escapeHtml(t.dueDate) + '</span>' : (t.dueDate ? '<span class="due">' + ui.escapeHtml(t.dueDate) + '</span>' : '<span class="muted">无截止日</span>')}</div>
           </div>
           <div class="row-actions"><button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button><button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button></div>
-        </div>${subHTML}`;
+        </div>${subHTML}</div>`;
     }
     const todoHTML = todo.length ? todo.map(todoItemHTML).join('') : ui.emptyState('今天没有待办，太棒了 🎉');
 
     const habitHTML = habits.length ? habits.map(hh => {
       const m = logFor(hh.id); const done = m[todayKey] && m[todayKey].done;
       return `<div class="card habit" data-id="${hh.id}" style="--hc:${ui.escapeHtml(hh.color || '#4f46e5')}">
-        <button class="habit-check ${done ? 'on' : ''}" data-id="${hh.id}">${ui.escapeHtml(hh.emoji || '⭐')}</button>
-        <div class="habit-main"><div class="habit-name">${ui.escapeHtml(hh.name)}</div><div class="habit-meta">🔥 连续 ${streak(m)} 天</div></div>
+        <button class="habit-check ${done ? 'on' : ''}" data-id="${hh.id}">${done ? ui.icon('check', 16) : ''}</button>
+        <div class="habit-main"><div class="habit-name">${ui.escapeHtml(hh.name)}</div><div class="habit-meta">连续 ${streak(m)} 天</div></div>
       </div>`;
     }).join('') : ui.emptyState('还没有习惯，去「习惯」页添加');
 
@@ -104,8 +104,8 @@
     </div>`;
     const planningHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
 
-    function panelHTML(picon, ptitle, pbody, pgo, pextra, bodyId) {
-      return `<section class="card panel">
+    function panelHTML(picon, ptitle, pbody, pgo, pextra, bodyId, wide) {
+      return `<section class="card panel${wide ? ' panel-wide' : ''}">
         <div class="panel-head">
           <div class="panel-title"><span class="pi">${ui.icon(picon, 18)}</span>${ptitle}</div>
           <div class="panel-actions">${pextra || ''}<button class="btn ghost sm" data-go="${pgo}">查看全部</button></div>
@@ -124,7 +124,7 @@
           <div class="stat"><div class="stat-num" id="stat-habit">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
         </div>
         <div class="dash-grid">
-          ${panelHTML('check', '今日待办', `<div id="todolist">${todoHTML}</div>`, 'tasks', '<button class="btn primary sm" id="add-task">+ 待办</button>')}
+          ${panelHTML('check', '今日待办', `<div id="todolist">${todoHTML}</div>`, 'tasks', '<button class="btn primary sm" id="add-task">+ 待办</button>', undefined, true)}
           ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '', 'p-habits')}
           ${panelHTML('wallet', '收支速览', finHTML, 'finance', '', 'p-fin')}
           ${panelHTML('pen', '内容创作', contentHTML, 'content', '', 'p-content')}
@@ -238,8 +238,8 @@
         if (body) body.innerHTML = total ? nh.map(hh => {
           const m = logFor2(hh.id); const on = m[todayKey] && m[todayKey].done;
           return `<div class="card habit" data-id="${hh.id}" style="--hc:${ui.escapeHtml(hh.color || '#4f46e5')}">
-            <button class="habit-check ${on ? 'on' : ''}" data-id="${hh.id}">${ui.escapeHtml(hh.emoji || '⭐')}</button>
-            <div class="habit-main"><div class="habit-name">${ui.escapeHtml(hh.name)}</div><div class="habit-meta">🔥 连续 ${streak(m)} 天</div></div>
+            <button class="habit-check ${on ? 'on' : ''}" data-id="${hh.id}">${on ? ui.icon('check', 16) : ''}</button>
+            <div class="habit-main"><div class="habit-name">${ui.escapeHtml(hh.name)}</div><div class="habit-meta">连续 ${streak(m)} 天</div></div>
           </div>`;
         }).join('') : ui.emptyState('还没有习惯，去「习惯」页添加');
         const se = root.querySelector('#stat-habit'); if (se) se.textContent = done + '/' + total;
