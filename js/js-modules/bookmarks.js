@@ -19,10 +19,7 @@
     const cats = ['全部', ...Array.from(new Set(all.map(i => i.category || '未分类')))];
     root.innerHTML = `
       <div class="page">
-        <div class="page-head">
-          <h1>🔖 书签 / 链接</h1>
-          <button class="btn primary" id="add">+ 新建</button>
-        </div>
+        ${ui.pageHead('bookmark', '书签 / 链接', { actions: '<button class="btn primary" id="add">+ 新建</button>' })}
         <div class="filters" id="filters">${cats.map(c => `<button class="chip" data-c="${ui.escapeHtml(c)}">${ui.escapeHtml(c)}</button>`).join('')}</div>
         <div id="list" class="grid cards-grid"></div>
       </div>`;
