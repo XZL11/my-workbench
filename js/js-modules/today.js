@@ -33,6 +33,7 @@
     const planning = (await store.getAll('planning')).filter(i => !i._deleted);
     const notes = (await store.getAll('notes')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
     const bookmarks = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
+    const calendar = (await store.getAll('calendar')).filter(i => !i._deleted);
 
     const parents = tasks.filter(t => !t.parentId);
     const childrenOf = pid => tasks.filter(t => t.parentId === pid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -95,56 +96,50 @@
     const notesHTML = notes.length ? notes.map(n => `<div class="card note-mini" data-go="notes"><div class="nm-title">${ui.escapeHtml(n.title || '无标题')}</div><div class="muted" style="font-size:12px">${ui.fmtRelative(n.updatedAt)}</div></div>`).join('') : ui.emptyState('暂无笔记');
     const bmHTML = bookmarks.length ? bookmarks.map(b => `<a class="card bm-mini" href="${ui.escapeHtml(b.url)}" target="_blank" rel="noopener"><div class="bm-mini-title">${ui.escapeHtml(b.title)}</div><div class="muted" style="font-size:12px">${ui.escapeHtml(b.category || '未分类')}</div></a>`).join('') : ui.emptyState('暂无书签');
 
+    const finHTML = `<div class="bars">${catBars}</div><div class="muted" style="margin-top:8px;font-size:13px">收入 ${income.toFixed(2)} · 支出 ${expense.toFixed(2)} · 结余 ${(income - expense).toFixed(2)}</div>`;
+    const contentHTML = `<div class="chips">
+      <span class="chip">💡 灵感 ${cStat.idea}</span>
+      <span class="chip">✍️ 草稿 ${cStat.draft}</span>
+      <span class="chip">👀 待审 ${cStat.review}</span>
+      <span class="chip">✅ 已发布 ${cStat.published}</span>
+    </div>`;
+    const planningHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
+    const todayEvents = calendar.filter(e => (e.startDate || '') === todayKey).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+    const scheduleHTML = todayEvents.length ? todayEvents.map(e => `
+      <div class="sched-item" data-go="calendar">
+        <span class="sched-time">${ui.escapeHtml(e.startTime || '全天')}</span>
+        <span class="sched-title">${ui.escapeHtml(e.title)}</span>
+      </div>`).join('') : ui.emptyState('今日暂无定时日程');
+
+    function panelHTML(picon, ptitle, pbody, pgo, pextra) {
+      return `<section class="card panel">
+        <div class="panel-head">
+          <div class="panel-title"><span class="pi">${ui.icon(picon, 18)}</span>${ptitle}</div>
+          <div class="panel-actions">${pextra || ''}<button class="btn ghost sm" data-go="${pgo}">查看全部</button></div>
+        </div>
+        <div class="panel-body">${pbody}</div>
+      </section>`;
+    }
+
     root.innerHTML = `
       <div class="page">
-        <div class="page-head"><div><h1>📌 今日</h1><div class="muted" style="font-size:13px">${greet}，${dateStr}</div></div></div>
+        <div class="page-head"><div><h1>📌 今日</h1><div class="muted" style="font-size:13px">${greet}，${dateStr}</div><div class="muted" style="font-size:13px;margin-top:2px">${todo.length} 项待办 · ${habitDone}/${habits.length} 习惯已打卡 · 本月结余 ${(income - expense).toFixed(2)}</div></div></div>
         <div class="stat-row">
           <div class="stat"><div class="stat-num">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
           <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}">${overdue.length}</div><div class="stat-label">已逾期</div></div>
           <div class="stat"><div class="stat-num">${(income - expense).toFixed(2)}</div><div class="stat-label">本月结余</div></div>
           <div class="stat"><div class="stat-num" id="stat-habit">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
         </div>
-
-        <section class="card section">
-          <div class="sec-head"><h2>✅ 今日待办</h2><button class="btn ghost sm" id="add-task">+ 待办</button></div>
-          <div id="todolist">${todoHTML}</div>
-        </section>
-
-        <section class="card section">
-          <h2>🔥 习惯打卡（今日）</h2>
-          <div id="habits">${habitHTML}</div>
-        </section>
-
-        <section class="card section">
-          <h2>💰 收支速览（本月）</h2>
-          <div class="bars">${catBars}</div>
-          <div class="muted" style="margin-top:8px;font-size:13px">收入 ${income.toFixed(2)} · 支出 ${expense.toFixed(2)}</div>
-        </section>
-
-        <section class="card section">
-          <h2>🎬 内容创作</h2>
-          <div class="chips">
-            <span class="chip">💡 灵感 ${cStat.idea}</span>
-            <span class="chip">✍️ 草稿 ${cStat.draft}</span>
-            <span class="chip">👀 待审 ${cStat.review}</span>
-            <span class="chip">✅ 已发布 ${cStat.published}</span>
-          </div>
-        </section>
-
-        <section class="card section">
-          <h2>🎯 长期规划</h2>
-          <div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>
-        </section>
-
-        <section class="card section">
-          <h2>📝 最近笔记</h2>
-          <div id="notes">${notesHTML}</div>
-        </section>
-
-        <section class="card section">
-          <h2>🔖 最近书签</h2>
-          <div id="bms">${bmHTML}</div>
-        </section>
+        <div class="dash-grid">
+          ${panelHTML('check', '今日待办', `<div id="todolist">${todoHTML}</div>`, 'tasks', '<button class="btn primary sm" id="add-task">+ 待办</button>')}
+          ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '')}
+          ${panelHTML('calendar', '今日日程', scheduleHTML, 'calendar', '')}
+          ${panelHTML('wallet', '收支速览', finHTML, 'finance', '')}
+          ${panelHTML('pen', '内容创作', contentHTML, 'content', '')}
+          ${panelHTML('target', '长期规划', planningHTML, 'planning', '')}
+          ${panelHTML('note', '最近笔记', notesHTML, 'notes', '')}
+          ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '')}
+        </div>
       </div>`;
 
     // 待办交互（含子任务）
