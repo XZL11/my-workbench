@@ -10,28 +10,27 @@
     return ids.indexOf(h) >= 0 ? h : WB.modules[0].id;
   }
 
-  function renderNav() {
-    const cur = currentId();
-    const item = m => `<button class="nav-item ${m.id === cur ? 'active' : ''}" data-id="${m.id}">
+  // 导航 DOM 只构建一次（init 时调用），route 时仅切换 active 类，
+  // 避免每次切换重建导致焦点丢失、动画重置（I1）
+  function buildNav() {
+    const item = m => `<button class="nav-item" data-id="${m.id}">
         <span class="nav-icon">${ui.icon(m.icon)}</span><span class="nav-label">${ui.escapeHtml(m.title)}</span></button>`;
     sidebarEl.innerHTML = WB.modules.map(item).join('');
     bottomEl.innerHTML = WB.modules.map(item).join('');
+  }
+
+  function setActiveNav(id) {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.id === id));
   }
 
   async function route() {
     const id = currentId();
     const mod = WB.modules.find(m => m.id === id);
     if (!mod) return;
-    renderNav();
+    setActiveNav(id);
     viewEl.innerHTML = '<div class="loading">加载中…</div>';
     try { await mod.render(viewEl); }
     catch (e) { viewEl.innerHTML = '<div class="empty">加载出错：' + ui.escapeHtml(e.message) + '</div>'; }
-    // 把卡片内的 emoji 操作按钮替换为统一 SVG 图标
-    viewEl.querySelectorAll('.icon-btn').forEach(b => {
-      const t = (b.textContent || '').trim();
-      const map = { '✏️': 'pencil', '🗑️': 'trash', '➕': 'plus', '＋': 'plus' };
-      if (map[t]) b.innerHTML = ui.icon(map[t], 16);
-    });
     closeDrawer();
   }
 
@@ -99,7 +98,7 @@
     window.addEventListener('online', () => { updateSyncDot(); autoSync(); });
     window.addEventListener('offline', updateSyncDot);
     updateSyncDot();
-
+    buildNav();
     await route();
 
     // 启动后若已配置且联网，立即同步一次（拉取云端 + 推送本地）
