@@ -34,12 +34,23 @@
     bookmark: 'bookmarks', book: 'reading', wallet: 'finance', pen: 'content',
     target: 'planning', bulb: 'recommend', settings: 'settings', tasks: 'tasks'
   };
+  const SPIDEY_MAP = {
+    home: 'today', calendar: 'calendar', note: 'notes', flame: 'habits',
+    bookmark: 'bookmarks', book: 'reading', wallet: 'finance', pen: 'content',
+    target: 'planning', bulb: 'recommend', settings: 'settings', tasks: 'tasks'
+  };
   function icon(name, size) {
     size = size || 20;
     if (WB.theme && WB.theme.isMascot && WB.theme.isMascot()) {
       const m = MASCOT_MAP[name];
       if (m) {
         return '<img class="ic ic-mascot ic-' + name + '" src="assets/mascot/' + m + '.png" width="' + size + '" height="' + size + '" alt="" aria-hidden="true" loading="lazy">';
+      }
+    }
+    if (WB.theme && WB.theme.isSpidey && WB.theme.isSpidey()) {
+      const m = SPIDEY_MAP[name];
+      if (m) {
+        return '<img class="ic ic-spidey ic-' + name + '" src="assets/spidey/' + m + '.png" width="' + size + '" height="' + size + '" alt="" aria-hidden="true" loading="lazy">';
       }
     }
     const inner = P[name];
