@@ -1,5 +1,6 @@
 // module: recommend 养生选题推荐（每日热门主题 + 上下格文案）
-// 数据来源：./data/recommendations.json（每日由自动化脚本刷新，全局共享，非用户私有数据）
+// 数据来源：./data/recommendations.json（每日由自动化脚本追加刷新，全局共享，非用户私有数据）
+//   结构：{ updatedAt, days: [ { date, topicCount, topics:[...] }, ... ] }（保留全部历史，按日期堆叠）
 // 兜底：内置 FALLBACK，离线或文件暂不可用时仍可浏览首批示例。
 (function (WB) {
   'use strict';
@@ -51,18 +52,37 @@
 
   let _cache = null;
 
-  // 拉取当日选题；cache:'no-store' 保证每天拿到最新（线上 JSON 每日刷新），离线回退兜底
-  async function getDaily() {
+  // 读取完整结构（含全部历史 days）；兼容旧的单日结构；失败时回退兜底
+  async function _load() {
     if (_cache) return _cache;
     try {
       const r = await fetch('./data/recommendations.json', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      _cache = await r.json();
+      const d = await r.json();
+      if (d && d.days && Array.isArray(d.days)) {
+        _cache = d;
+      } else if (d && d.topics && Array.isArray(d.topics)) {
+        // 旧结构兼容：包成单日
+        _cache = { days: [{ date: d.date || '', topicCount: d.topicCount, topics: d.topics }] };
+      } else {
+        throw new Error('bad shape');
+      }
     } catch (e) {
-      _cache = FALLBACK;
+      _cache = { days: [{ date: FALLBACK.date, topicCount: FALLBACK.topicCount, topics: FALLBACK.topics }] };
       _cache._fallback = true;
     }
     return _cache;
+  }
+
+  function sortDays(days) {
+    return (days || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }
+
+  // 给首页面板用：返回最新一天 {date, topics, topicCount}
+  async function getDaily() {
+    const full = await _load();
+    const days = sortDays(full.days);
+    return days[0] || { date: '', topics: [] };
   }
 
   // 复制文本（兼容非安全上下文）
@@ -114,33 +134,56 @@
   }
 
   async function render(root) {
+    const full = await _load();
+    const days = sortDays(full.days);
+
     root.innerHTML = ui.pageHead('bulb', '选题推荐', {
       subtitle: '抖音养生/养身账号 · 每日热门选题与上下格文案'
     }) + `
       <div class="reco-bar">
+        <select id="reco-date" class="input reco-date" title="选择日期查看历史选题"></select>
         <input id="reco-search" class="input" placeholder="搜索主题或话题标签…">
-        <div id="reco-meta" class="reco-meta"></div>
       </div>
+      <div id="reco-meta" class="reco-meta"></div>
       <div id="reco-list" class="reco-list">${ui.skeleton(4)}</div>`;
 
+    const dateSel = root.querySelector('#reco-date');
     const listEl = root.querySelector('#reco-list');
     const metaEl = root.querySelector('#reco-meta');
     const searchEl = root.querySelector('#reco-search');
 
-    const data = await getDaily();
-    if (data._fallback) metaEl.innerHTML = '<span class="muted">（离线兜底示例，联网后显示当日最新选题）</span>';
-    else metaEl.innerHTML = `<span class="muted">更新于 ${ui.escapeHtml(data.date || '')} · 共 ${data.topics ? data.topics.length : 0} 个选题</span>`;
+    if (!days.length) { listEl.innerHTML = ui.emptyState('暂无选题'); return; }
+
+    days.forEach(dy => {
+      const o = document.createElement('option');
+      o.value = dy.date;
+      o.textContent = (dy.date || '未知日期') + (dy.date === days[0].date ? '（今日）' : '');
+      dateSel.appendChild(o);
+    });
+    dateSel.value = days[0].date;
+
+    let current = days[0];
 
     function paint(filter) {
       filter = (filter || '').trim().toLowerCase();
-      const topics = (data.topics || []).filter(t => {
+      const topics = (current.topics || []).filter(t => {
         if (!filter) return true;
         if ((t.title || '').toLowerCase().includes(filter)) return true;
         return (t.tags || []).some(tag => tag.toLowerCase().includes(filter));
       });
       listEl.innerHTML = topics.length ? topics.map(topicHTML).join('') : ui.emptyState('没有匹配的选题');
     }
-    paint('');
+
+    function setDay(date) {
+      current = days.find(d => d.date === date) || days[0];
+      const hist = days.length > 1 ? ` · 历史共 ${days.length} 天` : '';
+      if (full._fallback) metaEl.innerHTML = '<span class="muted">（离线兜底示例，联网后显示当日最新选题）</span>';
+      else metaEl.innerHTML = `<span class="muted">${ui.escapeHtml(current.date || '')} · 共 ${(current.topics || []).length} 个选题${hist}</span>`;
+      paint(searchEl.value);
+    }
+
+    setDay(days[0].date);
+    dateSel.addEventListener('change', () => setDay(dateSel.value));
     searchEl.addEventListener('input', () => paint(searchEl.value));
 
     // 复制按钮（事件委托）
@@ -149,7 +192,7 @@
       if (one) { copyText(decodeURIComponent(one.dataset.copy), '文案已复制'); return; }
       const all = e.target.closest('.copy-all');
       if (all) {
-        const t = (data.topics || []).find(x => x.id === all.dataset.id);
+        const t = (current.topics || []).find(x => x.id === all.dataset.id);
         if (!t) return;
         const grouped = (t.copies || []).map((c, i) => `【第${i + 1}组｜上格】${c.top}\n【下格】${c.bottom}`).join('\n\n');
         const tail = (t.tags || []).join(' ');
@@ -158,6 +201,6 @@
     });
   }
 
-  WB.recommend = { render, getDaily };
+  WB.recommend = { render, getDaily, _load };
   WB.modules.push({ id: 'recommend', title: '选题推荐', icon: 'bulb', render });
 })(window.WB = window.WB || {});
