@@ -140,6 +140,8 @@
     window.addEventListener('offline', updateSyncDot);
     updateSyncDot();
     buildNav();
+    // 阅读模块一次性种子（微信读书同步数据），需在任何 render 之前完成，确保首页面板即时呈现
+    if (WB.seedReading) { try { await WB.seedReading(); } catch (e) {} }
     await route();
 
     // 启动后若已配置且联网，立即同步一次（拉取云端 + 推送本地）
