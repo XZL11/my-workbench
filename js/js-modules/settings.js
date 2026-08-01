@@ -66,9 +66,10 @@
             <select id="s-icon-theme" class="input">
               <option value="lucide">默认线条图标</option>
               <option value="mascot">猪猪侠吉祥物</option>
+              <option value="spidey">蜘蛛侠像素风</option>
             </select>
           </label>
-          <p class="muted" style="margin-top:8px">选择「猪猪侠吉祥物」后，导航与模块图标会切换为红色小猪形象。</p>
+          <p class="muted" style="margin-top:8px">选择「蜘蛛侠像素风」后，整站切换为深色蓝灰 + 青色像素边框，图标变为 8-bit 蜘蛛侠像素方块。</p>
         </section>
 
         <section class="card section">
