@@ -30,6 +30,10 @@
   };
   function icon(name, size) {
     size = size || 20;
+    const mascotNames = (WB.theme && WB.theme.mascotNames) || [];
+    if (WB.theme && WB.theme.isMascot && WB.theme.isMascot() && mascotNames.indexOf(name) >= 0) {
+      return '<img class="ic ic-mascot ic-' + name + '" src="assets/mascot/' + name + '.png" width="' + size + '" height="' + size + '" alt="" aria-hidden="true" loading="lazy">';
+    }
     const inner = P[name];
     if (!inner) return '';
     return '<svg class="ic ic-' + name + '" width="' + size + '" height="' + size +
