@@ -195,6 +195,8 @@ button { font-family: inherit; cursor: pointer; }
 .content-title, .plan-title { font-weight: 600; }
 .content-meta, .plan-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 12px; }
 .plan-note { margin-top: 6px; font-size: 13px; }
+.card.plan { align-items: flex-start; }
+.card.plan .chk { margin-top: 1px; }
 .st-done { opacity: .75; }
 .st-done .plan-title { text-decoration: line-through; }
 .badge.st-done { background: #e6f6ee; color: var(--success); }
@@ -331,6 +333,15 @@ button { font-family: inherit; cursor: pointer; }
 .cat-half-head.exp { color: var(--danger); }
 .cat-half-head.inc { color: var(--success); }
 @media (max-width: 560px) { .cat-split { flex-direction: column; gap: 16px; } }
+
+/* 今日面板：规划总览 */
+.plan-overview { display: flex; flex-direction: column; gap: 11px; }
+.plan-ov-row { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.plan-ov-row b { color: var(--text); font-size: 15px; margin-right: 3px; }
+.plan-ov-prog { display: flex; align-items: center; gap: 10px; }
+.plan-ov-prog .bar-track { flex: 1; }
+.plan-ov-num { flex: 0 0 auto; font-size: 12px; }
+.plan-ov-ms { font-size: 12px; }
 .trend { display: flex; align-items: flex-end; gap: 12px; height: 160px; padding-top: 8px; }
 .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
 .trend-bars { display: flex; gap: 4px; align-items: flex-end; height: 100%; width: 100%; justify-content: center; }
