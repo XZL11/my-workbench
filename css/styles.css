@@ -947,4 +947,38 @@ body {
 .note-view-body.md > :first-child { margin-top: 0; }
 .note-view-body.md > :last-child { margin-bottom: 0; }
 
+/* 内容创作面板 chips 容器（解决标签乱换行） */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips .chip { flex: 0 0 auto; }
+
+/* 阅读模块 */
+.card.reading { display: flex; align-items: flex-start; gap: 12px; }
+.reading-cover { width: 54px; height: 76px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; background: var(--surface-2); }
+.reading-cover-empty { display: grid; place-items: center; color: var(--muted); border: 1px solid var(--border); }
+.reading-main { flex: 1; min-width: 0; }
+.reading-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reading-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; margin-bottom: 8px; }
+.reading-meta .muted { font-size: 12px; }
+.stars { color: #f5a623; letter-spacing: 1px; font-size: 13px; }
+.reading-progress { display: flex; align-items: center; gap: 8px; }
+.reading-progress .bar-track { flex: 1; }
+.progress-num { font-size: 12px; color: var(--muted); flex: 0 0 auto; }
+.reading-view { display: flex; flex-direction: column; gap: 12px; }
+.reading-view-cover { display: flex; justify-content: center; }
+.reading-cover-lg { width: 110px; height: 154px; border-radius: 10px; object-fit: cover; box-shadow: var(--shadow-md); }
+.reading-view-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reading-progress-lg { margin: 2px 0; }
+.reading-view-note { font-size: 14px; line-height: 1.7; color: var(--text); overflow-wrap: anywhere; }
+.reading-view-note.md > :first-child { margin-top: 0; }
+.reading-view-note.md > :last-child { margin-bottom: 0; }
+
+/* 首页阅读面板 */
+.reading-panel { display: flex; flex-direction: column; gap: 10px; }
+.reading-summary { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.reading-summary b { color: var(--text); font-size: 15px; margin-right: 2px; }
+.reading-mini { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.reading-mini:hover { border-color: var(--muted); }
+.rm-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-prog { font-size: 12px; color: var(--primary); flex: 0 0 auto; font-weight: 600; }
+
 
