@@ -1194,8 +1194,13 @@ html.ip-pig[data-theme="dark"] .drawer {
 }
 /* 像素图标：保持硬边像素感 */
 html.spidey-pixel .ic-spidey { image-rendering: pixelated; image-rendering: crisp-edges; }
-/* 深色蓝灰实底（不铺照片，保证加载快） */
-html.spidey-pixel body, html.spidey-pixel.app { background: #0c1220; }
+/* 外部区域背景：像素蜘蛛网+中央蜘蛛侠，叠加深色遮罩保证文字可读 */
+html.spidey-pixel body, html.spidey-pixel.app {
+  background:
+    linear-gradient(165deg, rgba(7, 11, 20, .72), rgba(7, 11, 20, .58)),
+    url(../assets/spidey-bg.png) center/cover no-repeat fixed;
+  background-color: #0c1220;
+}
 /* 全局像素字体 + 直角 + 像素阴影 */
 html.spidey-pixel, html.spidey-pixel body { font-family: var(--font); letter-spacing: .02em; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
 html.spidey-pixel .topbar,
@@ -1220,21 +1225,35 @@ html.spidey-pixel .topbar {
 html.spidey-pixel .topbar .icon-btn { color: #e8f4ff; }
 html.spidey-pixel .topbar .icon-btn:hover { background: rgba(56, 189, 248, .22); }
 html.spidey-pixel .sync-dot { border-color: #38bdf8; }
-/* 侧栏：深蓝半透明 + 青色右边框 */
+/* 侧栏：独立蜘蛛网纹理 + 毛玻璃（比外部更模糊，形成层次） */
 html.spidey-pixel .sidebar {
-  background: rgba(11, 61, 145, .22);
+  background:
+    linear-gradient(180deg, rgba(11, 61, 145, .42), rgba(7, 11, 20, .78)),
+    url(../assets/spidey-nav-bg.png) center/cover no-repeat;
   border-right: 3px solid #38bdf8;
+  backdrop-filter: blur(10px) saturate(115%);
+  -webkit-backdrop-filter: blur(10px) saturate(115%);
 }
-/* 导航项 */
-html.spidey-pixel .nav-item { border: 2px solid transparent; color: var(--text); }
-html.spidey-pixel .nav-item:hover { border-color: #38bdf8; }
+/* 导航项：半透明玻璃底，透出导航栏背景 */
+html.spidey-pixel .nav-item {
+  border: 2px solid transparent;
+  color: var(--text);
+  background: rgba(7, 11, 20, .42);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+html.spidey-pixel .nav-item:hover {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, .16);
+}
 html.spidey-pixel .nav-item.active {
-  background: rgba(226, 54, 54, .18);
+  background: rgba(226, 54, 54, .22);
   border-color: #E23636;
   color: #fff;
   font-weight: 700;
 }
 html.spidey-pixel .nav-item.active .nav-icon { background: #0B3D91; border-radius: 0; }
+html.spidey-pixel .nav-icon { background: rgba(7, 11, 20, .35); }
 /* 卡片：深底 + 青色粗边 */
 html.spidey-pixel .card.section { background: rgba(15, 23, 40, .88); border: 3px solid #38bdf8; }
 html.spidey-pixel .card h2,
@@ -1259,8 +1278,15 @@ html.spidey-pixel textarea.input { background: #0c1220; color: #e8f4ff; border: 
 /* 弹窗 */
 html.spidey-pixel .modal { background: rgba(15, 23, 40, .96); border: 3px solid #38bdf8; }
 html.spidey-pixel .modal h3 { color: var(--accent); }
-/* 底部 Tab（移动端） */
-html.spidey-pixel .bottomtabs { background: rgba(11, 61, 145, .92); border-top: 3px solid #38bdf8; }
+/* 底部 Tab（移动端）：与侧栏同纹理 + 更强毛玻璃 */
+html.spidey-pixel .bottomtabs {
+  background:
+    linear-gradient(0deg, rgba(11, 61, 145, .55), rgba(7, 11, 20, .84)),
+    url(../assets/spidey-nav-bg.png) center/cover no-repeat;
+  border-top: 3px solid #38bdf8;
+  backdrop-filter: blur(12px) saturate(115%);
+  -webkit-backdrop-filter: blur(12px) saturate(115%);
+}
 html.spidey-pixel .bottomtabs .bt-item.active { color: #E23636; }
 /* 进度条（参考图 LOADING 像素条） */
 html.spidey-pixel .bar, html.spidey-pixel .progress {
@@ -1294,5 +1320,10 @@ html.spidey-pixel .toast,
 html.spidey-pixel .popover {
   background-color: var(--surface);
   color: var(--text);
+}
+/* 导航栏玻璃背景不被强制深色覆盖，保证蜘蛛网纹理+毛玻璃可见 */
+html.spidey-pixel .sidebar,
+html.spidey-pixel .bottomtabs {
+  background-color: transparent;
 }
 
