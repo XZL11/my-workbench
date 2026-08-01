@@ -152,9 +152,14 @@
         (topics.length ? topics.map(t => `<div class="reco-mini" data-go="recommend"><span class="rm-title">${ui.escapeHtml(t.title)}</span><span class="rm-num">${(t.copies || []).length}组</span></div>`).join('') : '<div class="muted" style="font-size:13px">暂无推荐</div>');
     }
 
+    const spideyBanner = (WB.theme && WB.theme.isSpidey && WB.theme.isSpidey())
+      ? '<div class="spidey-banner"><img src="assets/spidey-banner.png" alt="" loading="lazy"></div>'
+      : '';
+
     root.innerHTML = `
       <div class="page">
         ${ui.pageHead('home', '今日', { subtitle: ui.escapeHtml(greet) + '，' + dateStr + '<div class="muted" style="margin-top:2px">' + todo.length + ' 项待办 · ' + habitDone + '/' + habits.length + ' 习惯已打卡 · 本月结余 ' + (income - expense).toFixed(2) + '</div>' })}
+        ${spideyBanner}
         <div class="stat-row">
           <div class="stat"><div class="stat-num" id="stat-todo">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
           <div class="stat"><div class="stat-num ${overdue.length ? 'neg' : ''}" id="stat-overdue">${overdue.length}</div><div class="stat-label">已逾期</div></div>
