@@ -125,8 +125,10 @@
         return;
       }
       if (e.target.closest('.icon-btn.del')) {
-        const childIds = Object.keys(logMap).filter(k => k.startsWith(id + ':')).map(k => ({ store: 'habitlogs', id: k }));
-        ui.trashRecords([{ store: 'habits', id: id }, ...childIds], { label: '已删除习惯', repaint: refresh });
+        if (await ui.confirm({ title: '删除习惯', message: '确定删除这个习惯吗？其打卡记录也会一并删除，删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          const childIds = Object.keys(logMap).filter(k => k.startsWith(id + ':')).map(k => ({ store: 'habitlogs', id: k }));
+          ui.trashRecords([{ store: 'habits', id: id }, ...childIds], { label: '已删除习惯', repaint: refresh });
+        }
       }
     });
 
