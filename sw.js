@@ -1,7 +1,7 @@
 // sw.js - PWA 离线缓存（应用壳）
 // 修正：资源清单改为真实存在的文件（原 tasks.js 不存在导致 install 失败、离线失效）；
 //       补 icons.js / today.js / 图标；缓存策略改为 stale-while-revalidate，部署后免硬刷新。
-const CACHE = 'workbench-v18';
+const CACHE = 'workbench-v19';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/styles.css',
