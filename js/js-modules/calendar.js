@@ -123,7 +123,7 @@
           const obj = t ? Object.assign({}, t) : { id: store.uid(), createdAt: Date.now() };
           obj.title = title;
           obj.priority = parseInt(m.dialog.querySelector('#f-priority').value, 10);
-          obj.dueDate = dueDate || ui.fmtDate(Date.now());
+          obj.dueDate = dueDate || (t && t.dueDate) || ui.fmtDate(Date.now());
           obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
           obj.note = m.dialog.querySelector('#f-note').value;
           await store.put('tasks', obj); close();
@@ -166,6 +166,10 @@
           <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
           <div class="dd-body"><div class="dd-title">${ui.escapeHtml(t.title)}</div>
           <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span></div></div>
+          <div class="row-actions">
+            <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
+            <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
+          </div>
         </div>`).join('') : ui.emptyState('这一天还没有待办');
 
       const habitHTML = habits.length ? habits.map(h => {
@@ -195,9 +199,21 @@
       if (e.target.closest('.dd-back')) { closeDay(); return; }
       if (e.target.closest('[data-add="task"]')) { openTaskForm(null, dd.dataset.key); return; }
       const todoItem = e.target.closest('.dd-item.todo');
-      if (todoItem && e.target.classList.contains('chk')) {
-        const t = await store.get('tasks', todoItem.dataset.id);
-        t.done = e.target.checked; await store.put('tasks', t); paintDay(dd.dataset.key); return;
+      if (todoItem) {
+        const tid = todoItem.dataset.id;
+        if (e.target.classList.contains('chk')) {
+          const t = await store.get('tasks', tid);
+          t.done = e.target.checked; await store.put('tasks', t); paintDay(dd.dataset.key); return;
+        }
+        if (e.target.closest('.icon-btn.del')) {
+          if (await ui.confirm({ title: '删除待办', message: '确定要删除这条待办吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+            ui.trashRecords([{ store: 'tasks', id: tid }], { label: '已删除待办', repaint: () => { paint(); paintDay(dd.dataset.key); } });
+          }
+          return;
+        }
+        if (e.target.closest('.icon-btn.edit') || e.target.closest('.dd-body')) {
+          openTaskForm(await store.get('tasks', tid)); return;
+        }
       }
       const habitBtn = e.target.closest('.habit-check');
       if (habitBtn) {
