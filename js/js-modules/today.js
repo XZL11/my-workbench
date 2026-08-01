@@ -139,6 +139,19 @@
       </div>`;
     }
 
+    function recommendPanelHTML() {
+      return `<div id="p-recommend"><div class="muted" style="font-size:13px">加载中…</div></div>`;
+    }
+    async function fillRecommendPanel() {
+      const el = root.querySelector('#p-recommend');
+      if (!el || !WB.recommend) return;
+      let data;
+      try { data = await WB.recommend.getDaily(); } catch (e) { el.innerHTML = ui.emptyState('选题加载失败'); return; }
+      const topics = (data.topics || []).slice(0, 3);
+      el.innerHTML = `<div class="reco-summary"><span class="muted">${ui.escapeHtml(data.date || '')} · 共 ${(data.topics || []).length} 个选题</span></div>` +
+        (topics.length ? topics.map(t => `<div class="reco-mini" data-go="recommend"><span class="rm-title">${ui.escapeHtml(t.title)}</span><span class="rm-num">${(t.copies || []).length}组</span></div>`).join('') : '<div class="muted" style="font-size:13px">暂无推荐</div>');
+    }
+
     root.innerHTML = `
       <div class="page">
         ${ui.pageHead('home', '今日', { subtitle: ui.escapeHtml(greet) + '，' + dateStr + '<div class="muted" style="margin-top:2px">' + todo.length + ' 项待办 · ' + habitDone + '/' + habits.length + ' 习惯已打卡 · 本月结余 ' + (income - expense).toFixed(2) + '</div>' })}
@@ -157,8 +170,12 @@
           ${panelHTML('note', '最近笔记', notesHTML, 'notes', '', 'p-notes')}
           ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '', 'p-bookmarks')}
           ${panelHTML('book', '阅读', readingPanelHTML(), 'reading', '', 'p-reading')}
+          ${panelHTML('bulb', '选题推荐', recommendPanelHTML(), 'recommend', '', 'p-recommend')}
         </div>
       </div>`;
+
+    // 选题推荐面板为异步拉取，渲染后填充（不阻塞首页其余面板）
+    fillRecommendPanel();
 
     // 待办交互（含子任务）
     const tl = root.querySelector('#todolist');
