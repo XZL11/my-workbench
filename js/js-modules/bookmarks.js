@@ -79,7 +79,11 @@
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('bookmarks', id)); return; }
-      if (e.target.closest('.icon-btn.del')) { ui.trash('bookmarks', id, { label: '已删除书签', repaint: refresh }); }
+      if (e.target.closest('.icon-btn.del')) {
+        if (await ui.confirm({ title: '删除书签', message: '确定删除这个书签吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          ui.trash('bookmarks', id, { label: '已删除书签', repaint: refresh });
+        }
+      }
     });
   }
 
