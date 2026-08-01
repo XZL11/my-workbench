@@ -10,6 +10,10 @@
   let habitList = [], logList = [], finList = []; // 日详情用缓存，避免每次打卡反复读库（M1）
 
   function weekdayCN(d) { const w = '日一二三四五六'; return '周' + w[new Date(d).getDay()]; }
+  // 待办排序：未完成在前、已完成置底；同组内按优先级 高(1)→中(2)→低(3)
+  function sortTasks(list) {
+    return list.slice().sort((a, b) => (a.done === b.done ? (a.priority - b.priority) : (a.done ? 1 : -1)));
+  }
 
   function taskFormHTML(t, dueDate) {
     t = t || {};
@@ -103,7 +107,7 @@
       let html = WK.map(w => `<div class="cal-wk">${w}</div>`).join('');
       html += cells.map(c => {
         const key = ui.fmtDate(c.d);
-      const dayT = tasks.filter(t => t.dueDate === key);
+      const dayT = sortTasks(tasks.filter(t => t.dueDate === key));
       const taskHtml = dayT.map(t => `<div class="cal-ev todo pri-${t.priority} ${t.done ? 'done' : ''}">${ui.escapeHtml(t.title)}</div>`).join('');
       return `<div class="cal-cell ${c.out ? 'out' : ''} ${key === todayKey ? 'today' : ''}" data-date="${key}">
         <div class="cal-num">${c.d.getDate()}</div>${taskHtml}</div>`;
@@ -156,7 +160,7 @@
     function closeDay() { dd.classList.remove('open'); }
 
     async function paintDay(dateKey) {
-      const dayTasks = tasks.filter(i => !i._deleted && i.dueDate === dateKey);
+      const dayTasks = sortTasks(tasks.filter(i => !i._deleted && i.dueDate === dateKey));
       const habits = habitList;
       const logs = logList;
       const finance = finList.filter(i => (i.date || '') === dateKey);
