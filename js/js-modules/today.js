@@ -15,6 +15,29 @@
     </div>`;
   }
 
+  // 规划总览（今日面板 + 订阅刷新共用）：分类计数 + 完成进度 + 最近里程碑
+  function planOverviewHTML(plans) {
+    const byType = { year: 0, quarter: 0, goal: 0, milestone: 0 };
+    plans.forEach(p => { byType[p.type] = (byType[p.type] || 0) + 1; });
+    const total = plans.length;
+    const done = plans.filter(p => p.status === 'done').length;
+    const prog = total ? (done / total * 100) : 0;
+    const ms = plans.filter(p => p.type === 'milestone' && p.status !== 'done' && p.dueDate).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+    return `<div class="plan-overview">
+      <div class="plan-ov-row">
+        <span><b>${byType.year}</b> 年度</span>
+        <span><b>${byType.quarter}</b> 季度</span>
+        <span><b>${byType.goal}</b> 目标</span>
+        <span><b>${byType.milestone}</b> 里程碑</span>
+      </div>
+      <div class="plan-ov-prog">
+        <div class="bar-track"><div class="bar-fill" style="width:${prog.toFixed(1)}%"></div></div>
+        <span class="muted plan-ov-num">已完成 ${done}/${total}</span>
+      </div>
+      ${ms ? '<div class="muted plan-ov-ms">最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）</div>' : ''}
+    </div>`;
+  }
+
   function taskFormHTML(t) {
     t = t || {};
     return `<div class="form">
@@ -64,8 +87,6 @@
 
     const cStat = { idea: 0, draft: 0, review: 0, published: 0 };
     content.forEach(c => { cStat[c.status] = (cStat[c.status] || 0) + 1; });
-    const goals = planning.filter(p => p.type === 'goal' && p.status !== 'done').length;
-    const ms = planning.filter(p => p.type === 'milestone' && p.status !== 'done' && p.dueDate).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
     const d = new Date();
     const dateStr = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + '日一二三四五六'[d.getDay()];
@@ -107,7 +128,7 @@
 
     const finHTML = `<div class="bars">${catBars}</div><div class="muted" style="margin-top:8px;font-size:13px">收入 ${income.toFixed(2)} · 支出 ${expense.toFixed(2)} · 结余 ${(income - expense).toFixed(2)}</div>`;
     const contentHTML = contentChips(cStat);
-    const planningHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
+    const planningHTML = planOverviewHTML(planning);
 
     function panelHTML(picon, ptitle, pbody, pgo, pextra, bodyId, wide) {
       return `<section class="card panel${wide ? ' panel-wide' : ''}">
@@ -171,7 +192,7 @@
           ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '', 'p-habits')}
           ${panelHTML('wallet', '收支速览', finHTML, 'finance', '', 'p-fin')}
           ${panelHTML('pen', '内容创作', contentHTML, 'content', '', 'p-content')}
-          ${panelHTML('target', '长期规划', planningHTML, 'planning', '', 'p-planning')}
+          ${panelHTML('target', '规划总览', planningHTML, 'planning', '', 'p-planning')}
           ${panelHTML('note', '最近笔记', notesHTML, 'notes', '', 'p-notes')}
           ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '', 'p-bookmarks')}
           ${panelHTML('book', '阅读', readingPanelHTML(), 'reading', '', 'p-reading')}
@@ -319,10 +340,8 @@
       }
       if (name === 'planning') {
         const allP = (await store.getAll('planning')).filter(i => !i._deleted);
-        const goals = allP.filter(p => p.type === 'goal' && p.status !== 'done').length;
-        const ms = allP.filter(p => p.type === 'milestone' && p.status !== 'done' && p.dueDate).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
         const body = root.querySelector('#p-planning');
-        if (body) body.innerHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
+        if (body) body.innerHTML = planOverviewHTML(allP);
         return;
       }
       if (name === 'notes') {
