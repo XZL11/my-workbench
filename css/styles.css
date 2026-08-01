@@ -1041,3 +1041,40 @@ button:hover .ic-mascot,
   filter: drop-shadow(0 2px 4px rgba(239,68,68,.25));
 }
 
+/* ===== 猪猪侠 IP 主题（红色超级英雄小猪）：整站换肤 ===== */
+:root.ip-pig {
+  --primary: #E5383B;
+  --primary-2: #FF7A45;
+  --primary-weak: rgba(229, 56, 59, .12);
+  --primary-soft: rgba(229, 56, 59, .12);
+  --grad: linear-gradient(135deg, #E5383B, #FF7A45);
+  --glow-1: rgba(229, 56, 59, .14);
+  --glow-2: rgba(255, 122, 69, .10);
+}
+:root.ip-pig[data-theme="dark"] {
+  --primary: #FF5A5F;
+  --primary-2: #FF8C42;
+  --primary-weak: rgba(255, 90, 95, .16);
+  --primary-soft: rgba(255, 90, 95, .16);
+  --grad: linear-gradient(135deg, #FF5A5F, #FF8C42);
+  --glow-1: rgba(255, 90, 95, .18);
+  --glow-2: rgba(255, 140, 66, .12);
+}
+/* 顶栏：超级英雄红渐变，强化 IP 气质 */
+.ip-pig .topbar {
+  background: linear-gradient(120deg, var(--primary), var(--primary-2));
+  color: #fff;
+  border-bottom-color: transparent;
+}
+.ip-pig .topbar .icon-btn { color: #fff; }
+.ip-pig .topbar .icon-btn:hover { background: rgba(255, 255, 255, .18); }
+.ip-pig .sync-dot { border-color: rgba(255, 255, 255, .7); }
+/* 激活态 / 主按钮的红色光晕（覆盖写死的靛蓝 rgba） */
+.ip-pig .nav-item.active .nav-icon { box-shadow: 0 4px 12px rgba(229, 56, 59, .42); }
+.ip-pig .btn.primary { box-shadow: 0 4px 14px rgba(229, 56, 59, .32); }
+.ip-pig .btn.primary:hover { box-shadow: 0 6px 18px rgba(229, 56, 59, .40); }
+.ip-pig .btn:hover { box-shadow: 0 7px 20px rgba(229, 56, 59, .34); }
+/* 侧栏带红色能量底色，分区卡片加红色顶边 */
+.ip-pig .sidebar { background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 7%, var(--surface)), var(--surface)); }
+.ip-pig .card.section { border-top: 3px solid var(--primary); }
+
