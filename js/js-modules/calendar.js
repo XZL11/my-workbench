@@ -11,8 +11,9 @@
 
   function weekdayCN(d) { const w = '日一二三四五六'; return '周' + w[new Date(d).getDay()]; }
 
-  function taskFormHTML(t) {
+  function taskFormHTML(t, dueDate) {
     t = t || {};
+    const dueVal = dueDate || t.dueDate || ui.fmtDate(Date.now());
     return `<div class="form">
       <label>标题<input id="f-title" class="input" value="${ui.escapeHtml(t.title || '')}" placeholder="待办标题"></label>
       <div class="row">
@@ -20,6 +21,7 @@
           <option value="1" ${t.priority == 1 ? 'selected' : ''}>高</option>
           <option value="2" ${t.priority == 2 ? 'selected' : ''}>中</option>
           <option value="3" ${t.priority == 3 ? 'selected' : ''}>低</option></select></label>
+        <label style="flex:1">截止日期<input id="f-due" class="input" type="date" value="${dueVal}"></label>
       </div>
       <label>标签（逗号分隔）<input id="f-tags" class="input" value="${ui.escapeHtml((t.tags || []).join(', '))}" placeholder="工作, 紧急"></label>
       <label>备注<textarea id="f-note" class="input" rows="2">${ui.escapeHtml(t.note || '')}</textarea></label>
@@ -115,15 +117,16 @@
     root.querySelector('#today').onclick = () => { view = new Date(); view.setDate(1); paint(); };
 
     function openTaskForm(t, dueDate) {
+      const defaultDue = (t && t.dueDate) || dueDate || ui.fmtDate(Date.now());
       const m = ui.openModal({
-        title: t ? '编辑待办' : '新建待办', html: taskFormHTML(t),
+        title: t ? '编辑待办' : '新建待办', html: taskFormHTML(t, defaultDue),
         actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
           const title = m.dialog.querySelector('#f-title').value.trim();
           if (!title) { ui.toast('请填写标题', 'warn'); return; }
           const obj = t ? Object.assign({}, t) : { id: store.uid(), createdAt: Date.now() };
           obj.title = title;
           obj.priority = parseInt(m.dialog.querySelector('#f-priority').value, 10);
-          obj.dueDate = dueDate || (t && t.dueDate) || ui.fmtDate(Date.now());
+          obj.dueDate = m.dialog.querySelector('#f-due').value || defaultDue;
           obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
           obj.note = m.dialog.querySelector('#f-note').value;
           await store.put('tasks', obj); close();
