@@ -1144,6 +1144,9 @@ html.ip-pig[data-theme="dark"] .drawer {
   --grad: linear-gradient(180deg, #E23636 0%, #b91d1d 100%);
   --glow-1: rgba(56, 189, 248, .16);
   --glow-2: rgba(226, 54, 54, .14);
+  --glass: rgba(15, 23, 40, .82);
+  --glass-border: rgba(56, 189, 248, .45);
+  --glass-hi: rgba(255, 255, 255, .08);
   --radius: 0;
   --font: ui-monospace, 'Cascadia Mono', 'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace;
 }
@@ -1154,6 +1157,9 @@ html.ip-pig[data-theme="dark"] .drawer {
   --text: #ffffff;
   --muted: #9cc8e0;
   --accent: #8fe0ff;
+  --glass: rgba(10, 16, 30, .88);
+  --glass-border: rgba(56, 189, 248, .55);
+  --glass-hi: rgba(255, 255, 255, .06);
 }
 /* 像素图标：保持硬边像素感 */
 html.spidey-pixel .ic-spidey { image-rendering: pixelated; image-rendering: crisp-edges; }
@@ -1243,6 +1249,8 @@ html.spidey-pixel .bar > i, html.spidey-pixel .progress > i { background: linear
 /* 方案A-核心：强制所有内容面板深色底，彻底消除浅色模式露白底导致白字/蓝字“消失” */
 html.spidey-pixel .card,
 html.spidey-pixel .card.section,
+html.spidey-pixel .stat,
+html.spidey-pixel .dd-sec,
 html.spidey-pixel .modal,
 html.spidey-pixel .drawer,
 html.spidey-pixel .bottomtabs,
