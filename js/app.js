@@ -62,8 +62,9 @@
 
   function reload() { route(); }
 
-  // T1 切换图标主题后：重建导航图标 + 重渲染当前模块（无需整页刷新，避免 SW 缓存旧 JS）
+  // T1 切换图标主题后：应用 IP 类 + 重建导航图标 + 重渲染当前模块（无需整页刷新，避免 SW 缓存旧 JS）
   function applyIconTheme() {
+    document.documentElement.classList.toggle('ip-pig', WB.theme.isMascot());
     buildNav();
     route();
   }
@@ -130,6 +131,8 @@
 
   async function init() {
     theme.init();
+    // 应用 IP 主题类（整站换肤由 CSS 变量驱动）
+    document.documentElement.classList.toggle('ip-pig', WB.theme.isMascot());
     appEl = document.getElementById('app');
     sidebarEl = document.getElementById('sidebar');
     const initDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
