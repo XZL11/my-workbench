@@ -18,7 +18,11 @@
     set(name) {
       if (!ICON_THEMES.includes(name) || name === this.current) return;
       localStorage.setItem('wb_icon_theme', name);
-      location.reload();
+      this.current = name;
+      // 不整页刷新：直接重建导航图标 + 重渲染当前模块。
+      // 避免 PWA Service Worker 提供旧缓存的 JS，导致“切换图标主题无反应”。
+      if (WB.app && WB.app.applyIconTheme) WB.app.applyIconTheme();
+      else location.reload();
     },
     isMascot() { return this.current === 'mascot'; }
   };
@@ -57,6 +61,12 @@
   }
 
   function reload() { route(); }
+
+  // T1 切换图标主题后：重建导航图标 + 重渲染当前模块（无需整页刷新，避免 SW 缓存旧 JS）
+  function applyIconTheme() {
+    buildNav();
+    route();
+  }
 
   function updateSyncDot() {
     const online = navigator.onLine;
@@ -174,6 +184,6 @@
     }
   }
 
-  WB.app = { init, reload, route, scheduleSync };
+  WB.app = { init, reload, route, scheduleSync, applyIconTheme };
   document.addEventListener('DOMContentLoaded', init);
 })(window.WB = window.WB || {});
