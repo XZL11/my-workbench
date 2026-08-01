@@ -145,7 +145,11 @@
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
       if (e.target.closest('.icon-btn.edit')) { openForm(await store.get('finance', id)); return; }
-      if (e.target.closest('.icon-btn.del')) { ui.trash('finance', id, { label: '已删除记录', repaint: refresh }); }
+      if (e.target.closest('.icon-btn.del')) {
+        if (await ui.confirm({ title: '删除记录', message: '确定删除这条记账吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          ui.trash('finance', id, { label: '已删除记录', repaint: refresh });
+        }
+      }
     });
   }
 
