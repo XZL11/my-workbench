@@ -84,7 +84,12 @@
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.closest('.icon-btn.del')) { ui.trash('planning', id, { label: '已删除规划', repaint: refresh }); return; }
+      if (e.target.closest('.icon-btn.del')) {
+        if (await ui.confirm({ title: '删除规划', message: '确定删除这条规划吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          ui.trash('planning', id, { label: '已删除规划', repaint: refresh });
+        }
+        return;
+      }
       openForm(await store.get('planning', id));
     });
   }
