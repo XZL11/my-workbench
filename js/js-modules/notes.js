@@ -108,12 +108,39 @@
       ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
+    function openView(n) {
+      if (!n) return;
+      const tags = (n.tags || []).map(x => `<span class="tag">${ui.escapeHtml(x)}</span>`).join(' ');
+      ui.openModal({
+        title: ui.escapeHtml(n.title || '无标题'),
+        html: `
+          <div class="note-view">
+            <div class="note-view-meta">
+              <span class="badge">${TYPES[n.type] || '笔记'}</span>
+              ${tags ? '<span class="note-tags">' + tags + '</span>' : ''}
+              <span class="muted">${ui.fmtRelative(n.updatedAt)}</span>
+            </div>
+            <div class="note-view-body md">${ui.mdLite(n.body || '')}</div>
+          </div>`,
+        actions: [
+          { label: '关闭' },
+          { label: '编辑', primary: true, onClick: (close) => { close(); openForm(n); } }
+        ]
+      });
+    }
     root.querySelector('#add').onclick = () => openForm(null);
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.closest('.icon-btn.del')) { ui.trash('notes', id, { label: '已删除笔记', repaint: refresh }); return; }
-      openForm(await store.get('notes', id));
+      const note = await store.get('notes', id);
+      if (e.target.closest('.icon-btn.del')) {
+        if (await ui.confirm({ title: '删除笔记', message: '确定删除这条笔记吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          ui.trash('notes', id, { label: '已删除笔记', repaint: refresh });
+        }
+        return;
+      }
+      if (e.target.closest('.icon-btn.edit')) { openForm(note); return; }
+      openView(note);
     });
   }
 
