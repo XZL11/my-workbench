@@ -3,7 +3,7 @@
   'use strict';
   WB.modules = WB.modules || []; // 功能模块注册表（模块文件先于 app.js 加载）
   const DB_NAME = 'workbench-db';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORES = ['tasks', 'calendar', 'notes', 'habits', 'habitlogs', 'bookmarks', 'finance', 'content', 'planning', 'reading', 'meta'];
   const SYNC_STORES = STORES.filter(s => s !== 'meta');
   let _db = null;
