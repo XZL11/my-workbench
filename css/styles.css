@@ -1127,3 +1127,105 @@ html.ip-pig[data-theme="dark"] .drawer {
   border: 1px solid rgba(255,255,255,.1);
 }
 
+/* ===== 蜘蛛侠像素风主题 spidey-pixel ===== */
+:root.spidey-pixel {
+  --bg: #0c1220;
+  --surface: rgba(15, 23, 40, .88);
+  --surface-2: rgba(22, 34, 58, .9);
+  --text: #e8f4ff;
+  --muted: #7aa7c7;
+  --border: #38bdf8;
+  --border-dim: #1e6f99;
+  --primary: #E23636;
+  --primary-2: #0B3D91;
+  --primary-weak: rgba(226, 54, 54, .18);
+  --primary-soft: rgba(11, 61, 145, .18);
+  --grad: linear-gradient(180deg, #E23636 0%, #b91d1d 100%);
+  --glow-1: rgba(56, 189, 248, .16);
+  --glow-2: rgba(226, 54, 54, .14);
+  --radius: 0;
+  --font: ui-monospace, 'Cascadia Mono', 'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace;
+}
+:root.spidey-pixel[data-theme="dark"] {
+  --bg: #070b14;
+  --surface: rgba(10, 16, 30, .9);
+  --surface-2: rgba(16, 26, 48, .92);
+  --text: #f0f8ff;
+  --muted: #6b9bb8;
+}
+/* 像素图标：保持硬边像素感 */
+html.spidey-pixel .ic-spidey { image-rendering: pixelated; image-rendering: crisp-edges; }
+/* 深色蓝灰实底（不铺照片，保证加载快） */
+html.spidey-pixel body, html.spidey-pixel.app { background: #0c1220; }
+/* 全局像素字体 + 直角 + 像素阴影 */
+html.spidey-pixel, html.spidey-pixel body { font-family: var(--font); letter-spacing: .02em; }
+html.spidey-pixel .topbar,
+html.spidey-pixel .sidebar,
+html.spidey-pixel .card,
+html.spidey-pixel .modal,
+html.spidey-pixel .bottomtabs,
+html.spidey-pixel .drawer,
+html.spidey-pixel .btn,
+html.spidey-pixel .nav-item,
+html.spidey-pixel .input,
+html.spidey-pixel .chip {
+  border-radius: 0;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, .45);
+}
+/* 顶栏：深蓝实底 + 青色底边 */
+html.spidey-pixel .topbar {
+  background: #0B3D91;
+  color: #e8f4ff;
+  border-bottom: 3px solid #38bdf8;
+}
+html.spidey-pixel .topbar .icon-btn { color: #e8f4ff; }
+html.spidey-pixel .topbar .icon-btn:hover { background: rgba(56, 189, 248, .22); }
+html.spidey-pixel .sync-dot { border-color: #38bdf8; }
+/* 侧栏：深蓝半透明 + 青色右边框 */
+html.spidey-pixel .sidebar {
+  background: rgba(11, 61, 145, .22);
+  border-right: 3px solid #38bdf8;
+}
+/* 导航项 */
+html.spidey-pixel .nav-item { border: 2px solid transparent; color: var(--text); }
+html.spidey-pixel .nav-item:hover { border-color: #38bdf8; }
+html.spidey-pixel .nav-item.active {
+  background: rgba(226, 54, 54, .18);
+  border-color: #E23636;
+  color: #fff;
+  font-weight: 700;
+}
+html.spidey-pixel .nav-item.active .nav-icon { background: #0B3D91; border-radius: 0; }
+/* 卡片：深底 + 青色粗边 */
+html.spidey-pixel .card.section { background: rgba(15, 23, 40, .88); border: 3px solid #38bdf8; }
+html.spidey-pixel .card h2,
+html.spidey-pixel .section h2,
+html.spidey-pixel .page-head-main h1 { color: #38bdf8; }
+html.spidey-pixel .page-head-sub { color: #7aa7c7; }
+/* 标题大写像素感 */
+html.spidey-pixel .page-head-main h1 { text-transform: uppercase; letter-spacing: .06em; }
+/* 按钮：红/青像素块 */
+html.spidey-pixel .btn.primary,
+html.spidey-pixel .btn { background: #E23636; border: 2px solid #E23636; color: #fff; }
+html.spidey-pixel .btn.primary:hover,
+html.spidey-pixel .btn:hover { background: #b91d1d; }
+html.spidey-pixel .btn.ghost { background: #0c1220; color: #38bdf8; border-color: #38bdf8; }
+html.spidey-pixel .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0, 0, 0, .45); }
+/* 链接/强调 */
+html.spidey-pixel a, html.spidey-pixel .link { color: #38bdf8; }
+/* 表单项 */
+html.spidey-pixel .input,
+html.spidey-pixel select.input,
+html.spidey-pixel textarea.input { background: #0c1220; color: #e8f4ff; border: 2px solid #1e6f99; border-radius: 0; }
+/* 弹窗 */
+html.spidey-pixel .modal { background: rgba(15, 23, 40, .96); border: 3px solid #38bdf8; }
+html.spidey-pixel .modal h3 { color: #38bdf8; }
+/* 底部 Tab（移动端） */
+html.spidey-pixel .bottomtabs { background: rgba(11, 61, 145, .92); border-top: 3px solid #38bdf8; }
+html.spidey-pixel .bottomtabs .bt-item.active { color: #E23636; }
+/* 进度条（参考图 LOADING 像素条） */
+html.spidey-pixel .bar, html.spidey-pixel .progress {
+  background: #0c1220; border: 2px solid #38bdf8; box-shadow: 4px 4px 0 rgba(0,0,0,.45);
+}
+html.spidey-pixel .bar > i, html.spidey-pixel .progress > i { background: linear-gradient(90deg, #E23636, #ff5a5a); }
+
