@@ -1,7 +1,7 @@
 // sw.js - PWA 离线缓存（应用壳）
 // 修正：资源清单改为真实存在的文件（原 tasks.js 不存在导致 install 失败、离线失效）；
 //       补 icons.js / today.js / 图标；缓存策略改为 stale-while-revalidate，部署后免硬刷新。
-const CACHE = 'workbench-v10';
+const CACHE = 'workbench-v11';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/styles.css',
@@ -9,7 +9,11 @@ const ASSETS = [
   './js/js-modules/calendar.js', './js/js-modules/today.js', './js/js-modules/notes.js',
   './js/js-modules/habits.js', './js/js-modules/bookmarks.js', './js/js-modules/finance.js',
   './js/js-modules/content.js', './js/js-modules/planning.js', './js/js-modules/reading.js', './js/js-modules/recommend.js', './js/js-modules/settings.js',
-  './icons/icon-192.png', './icons/icon-512.png'
+  './icons/icon-192.png', './icons/icon-512.png',
+  './assets/mascot/base.png', './assets/mascot/today.png', './assets/mascot/tasks.png', './assets/mascot/calendar.png',
+  './assets/mascot/notes.png', './assets/mascot/habits.png', './assets/mascot/bookmarks.png', './assets/mascot/finance.png',
+  './assets/mascot/content.png', './assets/mascot/planning.png', './assets/mascot/reading.png', './assets/mascot/recommend.png',
+  './assets/mascot/settings.png'
 ];
 
 self.addEventListener('install', (e) => {
