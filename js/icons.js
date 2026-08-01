@@ -28,11 +28,19 @@
     inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
     bulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V18h6v-1.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/>'
   };
+  // 模块图标名 → 吉祥物图片文件名（解决图标名与文件名不一致导致的空白/错配）
+  const MASCOT_MAP = {
+    home: 'today', calendar: 'calendar', note: 'notes', flame: 'habits',
+    bookmark: 'bookmarks', book: 'reading', wallet: 'finance', pen: 'content',
+    target: 'planning', bulb: 'recommend', settings: 'settings', tasks: 'tasks'
+  };
   function icon(name, size) {
     size = size || 20;
-    const mascotNames = (WB.theme && WB.theme.mascotNames) || [];
-    if (WB.theme && WB.theme.isMascot && WB.theme.isMascot() && mascotNames.indexOf(name) >= 0) {
-      return '<img class="ic ic-mascot ic-' + name + '" src="assets/mascot/' + name + '.png" width="' + size + '" height="' + size + '" alt="" aria-hidden="true" loading="lazy">';
+    if (WB.theme && WB.theme.isMascot && WB.theme.isMascot()) {
+      const m = MASCOT_MAP[name];
+      if (m) {
+        return '<img class="ic ic-mascot ic-' + name + '" src="assets/mascot/' + m + '.png" width="' + size + '" height="' + size + '" alt="" aria-hidden="true" loading="lazy">';
+      }
     }
     const inner = P[name];
     if (!inner) return '';
