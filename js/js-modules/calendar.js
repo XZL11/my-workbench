@@ -209,8 +209,15 @@
       if (todoItem) {
         const tid = todoItem.dataset.id;
         if (e.target.classList.contains('chk')) {
+          const checked = e.target.checked;
+          // 同步更新内存缓存，避免 paintDay 用旧值重绘导致勾选状态回退
+          const idx = tasks.findIndex(t => t.id === tid);
+          if (idx >= 0) tasks[idx].done = checked;
           const t = await store.get('tasks', tid);
-          t.done = e.target.checked; await store.put('tasks', t); paintDay(dd.dataset.key); return;
+          if (t) { t.done = checked; await store.put('tasks', t); }
+          paintDay(dd.dataset.key); // 当日待办实时反映勾选/取消
+          paint(); // 同步刷新月视图该任务状态
+          return;
         }
         if (e.target.closest('.icon-btn.del')) {
           if (await ui.confirm({ title: '删除待办', message: '确定要删除这条待办吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
