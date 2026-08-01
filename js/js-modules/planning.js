@@ -28,13 +28,16 @@
         <div id="list" class="list"></div>
       </div>`;
     const list = root.querySelector('#list');
+    let currentFilter = 'all';
     function paint(f) {
+      currentFilter = f || 'all';
       let view = all;
       if (f && f !== 'all') view = view.filter(i => i.type === f);
-      view = view.sort((a, b) => (a.type).localeCompare(b.type) || (a.dueDate || '').localeCompare(b.dueDate || ''));
+      view = view.sort((a, b) => (a.type).localeCompare(b.type) || (a.dueDate || '').localeCompare(b.dueDate || '') || ((a.status === 'done') - (b.status === 'done')));
       if (!view.length) { list.innerHTML = ui.emptyState('还没有规划，开始制定你的目标吧', { action: { label: '新建规划' } }); bindEmpty(); return; }
       list.innerHTML = view.map(p => `
         <div class="card plan st-${p.status}" data-id="${p.id}">
+          <input type="checkbox" class="chk" ${p.status === 'done' ? 'checked' : ''} title="打勾即标记完成">
           <div class="plan-main">
             <div class="plan-title">${ui.escapeHtml(p.title)}</div>
             <div class="plan-meta">
@@ -84,6 +87,14 @@
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
+      if (e.target.classList.contains('chk')) {
+        const item = all.find(p => p.id === id);
+        if (!item) return;
+        item.status = e.target.checked ? 'done' : 'todo'; // 打勾即完成
+        await store.put('planning', item);
+        paint(currentFilter); // 即时重绘，勾选状态/已完成样式同步
+        return;
+      }
       if (e.target.closest('.icon-btn.del')) {
         if (await ui.confirm({ title: '删除规划', message: '确定删除这条规划吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
           ui.trash('planning', id, { label: '已删除规划', repaint: refresh });
