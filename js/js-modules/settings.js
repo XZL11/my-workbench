@@ -62,6 +62,13 @@
               <option value="dark">深色</option>
             </select>
           </label>
+          <label style="margin-top:12px">图标主题
+            <select id="s-icon-theme" class="input">
+              <option value="lucide">默认线条图标</option>
+              <option value="mascot">猪猪侠吉祥物</option>
+            </select>
+          </label>
+          <p class="muted" style="margin-top:8px">选择「猪猪侠吉祥物」后，导航与模块图标会切换为红色小猪形象。</p>
         </section>
 
         <section class="card section">
@@ -101,6 +108,11 @@
     root.querySelector('#s-theme').value = await store.getMeta('theme', 'auto');
     root.querySelector('#s-theme').addEventListener('change', async e => {
       await ui.setTheme(e.target.value); ui.toast('主题已更新');
+    });
+
+    root.querySelector('#s-icon-theme').value = (WB.theme && WB.theme.current) || 'lucide';
+    root.querySelector('#s-icon-theme').addEventListener('change', e => {
+      if (WB.theme && WB.theme.set) { WB.theme.set(e.target.value); }
     });
 
     root.querySelector('#save-cfg').onclick = async () => {
