@@ -933,3 +933,18 @@ body {
 .palette-item svg { width: 18px; height: 18px; color: var(--primary); flex: 0 0 auto; }
 .palette-item.active, .palette-item:hover { background: var(--primary-weak); }
 
+/* 删除确认：红色实心按钮（danger + primary 组合） */
+.btn.primary.danger { background: var(--danger); border-color: var(--danger); color: #fff; box-shadow: 0 4px 14px rgba(229, 72, 77, .28); }
+.btn.primary.danger:hover { filter: brightness(1.06); box-shadow: 0 6px 18px rgba(229, 72, 77, .36); }
+.confirm-msg { color: var(--text); font-size: 15px; line-height: 1.6; margin: 0; }
+
+/* 笔记查看界面（只读预览，区别于编辑表单） */
+.note-view { display: flex; flex-direction: column; gap: 14px; }
+.note-view-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.note-view-meta .muted { margin-left: auto; }
+.note-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.note-view-body { font-size: 15px; line-height: 1.75; color: var(--text); overflow-wrap: anywhere; }
+.note-view-body.md > :first-child { margin-top: 0; }
+.note-view-body.md > :last-child { margin-bottom: 0; }
+
+
