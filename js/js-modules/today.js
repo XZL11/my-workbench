@@ -146,8 +146,10 @@
         return;
       }
       if (e.target.closest('.icon-btn.del')) {
-        const childItems = card.classList.contains('sub') ? [] : childrenOf(id).map(k => ({ store: 'tasks', id: k.id }));
-        ui.trashRecords([{ store: 'tasks', id: id }, ...childItems], { label: card.classList.contains('sub') ? '已删除子任务' : '已删除待办', repaint: renderTodo });
+        if (await ui.confirm({ title: card.classList.contains('sub') ? '删除子任务' : '删除待办', message: '确定删除吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          const childItems = card.classList.contains('sub') ? [] : childrenOf(id).map(k => ({ store: 'tasks', id: k.id }));
+          ui.trashRecords([{ store: 'tasks', id: id }, ...childItems], { label: card.classList.contains('sub') ? '已删除子任务' : '已删除待办', repaint: renderTodo });
+        }
         return;
       }
       if (!card.classList.contains('sub') && (e.target.closest('.icon-btn.edit') || e.target.closest('.task-main'))) {
