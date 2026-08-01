@@ -4,13 +4,15 @@
   const store = WB.store, ui = WB.ui, sync = WB.sync;
   let viewEl, sidebarEl, bottomEl, syncDot, appEl;
 
-  // T1 图标主题：lucide（默认 SVG） / mascot（猪猪侠吉祥物 PNG）
-  const ICON_THEMES = ['lucide', 'mascot'];
+  // T1 图标主题：lucide（默认 SVG） / mascot（猪猪侠吉祥物 PNG） / spidey（蜘蛛侠像素 PNG）
+  const ICON_THEMES = ['lucide', 'mascot', 'spidey'];
   const MASCOT_NAMES = ['today','tasks','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings'];
+  const SPIDEY_NAMES = ['today','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings'];
   const theme = {
     current: 'lucide',
     list: ICON_THEMES,
     mascotNames: MASCOT_NAMES,
+    spideyNames: SPIDEY_NAMES,
     init() {
       const saved = localStorage.getItem('wb_icon_theme');
       this.current = ICON_THEMES.includes(saved) ? saved : 'lucide';
@@ -24,7 +26,8 @@
       if (WB.app && WB.app.applyIconTheme) WB.app.applyIconTheme();
       else location.reload();
     },
-    isMascot() { return this.current === 'mascot'; }
+    isMascot() { return this.current === 'mascot'; },
+    isSpidey() { return this.current === 'spidey'; }
   };
   WB.theme = theme;
 
@@ -65,6 +68,7 @@
   // T1 切换图标主题后：应用 IP 类 + 重建导航图标 + 重渲染当前模块（无需整页刷新，避免 SW 缓存旧 JS）
   function applyIconTheme() {
     document.documentElement.classList.toggle('ip-pig', WB.theme.isMascot());
+    document.documentElement.classList.toggle('spidey-pixel', WB.theme.isSpidey());
     buildNav();
     route();
   }
@@ -133,6 +137,7 @@
     theme.init();
     // 应用 IP 主题类（整站换肤由 CSS 变量驱动）
     document.documentElement.classList.toggle('ip-pig', WB.theme.isMascot());
+    document.documentElement.classList.toggle('spidey-pixel', WB.theme.isSpidey());
     appEl = document.getElementById('app');
     sidebarEl = document.getElementById('sidebar');
     const initDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
