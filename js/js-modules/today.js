@@ -6,6 +6,14 @@
 
   function lastNDays(n) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); out.push(ui.fmtDate(d.getTime())); } return out; }
   function streak(m) { let s = 0; const t = new Date(); for (let i = 0;; i++) { const d = new Date(t); d.setDate(d.getDate() - i); const k = ui.fmtDate(d.getTime()); if (m[k] && m[k].done) s++; else break; } return s; }
+  function contentChips(cs) {
+    return `<div class="chips">
+      <span class="chip">💡 灵感 ${cs.idea}</span>
+      <span class="chip">✍️ 草稿 ${cs.draft}</span>
+      <span class="chip">👀 待审 ${cs.review}</span>
+      <span class="chip">✅ 已发布 ${cs.published}</span>
+    </div>`;
+  }
 
   function taskFormHTML(t) {
     t = t || {};
@@ -33,6 +41,8 @@
     const planning = (await store.getAll('planning')).filter(i => !i._deleted);
     const notes = (await store.getAll('notes')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
     const bookmarks = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
+    let readings = (await store.getAll('reading')).filter(i => i && i.id && i.id !== 'stat');
+    let readingStat = (await store.getAll('reading')).find(i => i && i.id === 'stat') || {};
 
     const parents = tasks.filter(t => !t.parentId);
     const childrenOf = pid => tasks.filter(t => t.parentId === pid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -96,12 +106,7 @@
     const bmHTML = bookmarks.length ? bookmarks.map(b => `<a class="card bm-mini" href="${ui.escapeHtml(b.url)}" target="_blank" rel="noopener"><div class="bm-mini-title">${ui.escapeHtml(b.title)}</div><div class="muted" style="font-size:12px">${ui.escapeHtml(b.category || '未分类')}</div></a>`).join('') : ui.emptyState('暂无书签');
 
     const finHTML = `<div class="bars">${catBars}</div><div class="muted" style="margin-top:8px;font-size:13px">收入 ${income.toFixed(2)} · 支出 ${expense.toFixed(2)} · 结余 ${(income - expense).toFixed(2)}</div>`;
-    const contentHTML = `<div class="chips">
-      <span class="chip">💡 灵感 ${cStat.idea}</span>
-      <span class="chip">✍️ 草稿 ${cStat.draft}</span>
-      <span class="chip">👀 待审 ${cStat.review}</span>
-      <span class="chip">✅ 已发布 ${cStat.published}</span>
-    </div>`;
+    const contentHTML = contentChips(cStat);
     const planningHTML = `<div class="muted" style="font-size:14px">进行中目标 <b>${goals}</b>${ms ? ' · 最近里程碑：' + ui.escapeHtml(ms.title) + '（' + ui.escapeHtml(ms.dueDate) + '）' : ''}</div>`;
 
     function panelHTML(picon, ptitle, pbody, pgo, pextra, bodyId, wide) {
@@ -112,6 +117,26 @@
         </div>
         <div class="panel-body"${bodyId ? ' id="' + bodyId + '"' : ''}>${pbody}</div>
       </section>`;
+    }
+
+    function readingPanelHTML() {
+      const cur = readings.filter(r => (r.status || 'want') === 'reading').length;
+      const done = readings.filter(r => (r.status || 'want') === 'finished').length;
+      let timeLabel = '';
+      if (readingStat && readingStat.monthlyReadTime) {
+        timeLabel = '<span><b>' + Math.round(readingStat.monthlyReadTime / 60) + '</b> 分钟/月</span>';
+      } else if (readingStat && readingStat.annualReadTime) {
+        timeLabel = '<span><b>' + (readingStat.annualReadTime / 3600).toFixed(1) + '</b> 小时/年</span>';
+      }
+      const curList = readings.filter(r => (r.status || 'want') === 'reading').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
+      return `<div class="reading-panel">
+        <div class="reading-summary">
+          <span><b>${cur}</b> 在读</span>
+          <span><b>${done}</b> 读完</span>
+          ${timeLabel}
+        </div>
+        ${curList.length ? curList.map(r => `<div class="reading-mini" data-go="reading"><span class="rm-title">${ui.escapeHtml(r.title || '无标题')}</span><span class="rm-prog">${Math.max(0, Math.min(100, r.progress || 0))}%</span></div>`).join('') : '<div class="muted" style="font-size:13px">暂无在读书目</div>'}
+      </div>`;
     }
 
     root.innerHTML = `
@@ -131,6 +156,7 @@
           ${panelHTML('target', '长期规划', planningHTML, 'planning', '', 'p-planning')}
           ${panelHTML('note', '最近笔记', notesHTML, 'notes', '', 'p-notes')}
           ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '', 'p-bookmarks')}
+          ${panelHTML('book', '阅读', readingPanelHTML(), 'reading', '', 'p-reading')}
         </div>
       </div>`;
 
@@ -266,12 +292,7 @@
         const cs = { idea: 0, draft: 0, review: 0, published: 0 };
         allC.forEach(c => { cs[c.status] = (cs[c.status] || 0) + 1; });
         const body = root.querySelector('#p-content');
-        if (body) body.innerHTML = `<div class="chips">
-          <span class="chip">💡 灵感 ${cs.idea}</span>
-          <span class="chip">✍️ 草稿 ${cs.draft}</span>
-          <span class="chip">👀 待审 ${cs.review}</span>
-          <span class="chip">✅ 已发布 ${cs.published}</span>
-        </div>`;
+        if (body) body.innerHTML = contentChips(cs);
         return;
       }
       if (name === 'planning') {
@@ -294,8 +315,15 @@
         if (body) body.innerHTML = allB.length ? allB.map(b => `<a class="card bm-mini" href="${ui.escapeHtml(b.url)}" target="_blank" rel="noopener"><div class="bm-mini-title">${ui.escapeHtml(b.title)}</div><div class="muted" style="font-size:12px">${ui.escapeHtml(b.category || '未分类')}</div></a>`).join('') : ui.emptyState('暂无书签');
         return;
       }
+      if (name === 'reading') {
+        readings = (await store.getAll('reading')).filter(i => i && i.id && i.id !== 'stat');
+        readingStat = (await store.getAll('reading')).find(i => i && i.id === 'stat') || {};
+        const body = root.querySelector('#p-reading');
+        if (body) body.innerHTML = readingPanelHTML();
+        return;
+      }
     }
-    ['tasks', 'habits', 'habitlogs', 'finance', 'content', 'planning', 'notes', 'bookmarks'].forEach(name => store.subscribe(name, () => liveRepaint(name)));
+    ['tasks', 'habits', 'habitlogs', 'finance', 'content', 'planning', 'notes', 'bookmarks', 'reading'].forEach(name => store.subscribe(name, () => liveRepaint(name)));
   }
 
   WB.modules.unshift({ id: 'today', title: '今日', icon: 'home', render });
