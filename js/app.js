@@ -4,6 +4,26 @@
   const store = WB.store, ui = WB.ui, sync = WB.sync;
   let viewEl, sidebarEl, bottomEl, syncDot, appEl;
 
+  // T1 图标主题：lucide（默认 SVG） / mascot（猪猪侠吉祥物 PNG）
+  const ICON_THEMES = ['lucide', 'mascot'];
+  const MASCOT_NAMES = ['today','tasks','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings'];
+  const theme = {
+    current: 'lucide',
+    list: ICON_THEMES,
+    mascotNames: MASCOT_NAMES,
+    init() {
+      const saved = localStorage.getItem('wb_icon_theme');
+      this.current = ICON_THEMES.includes(saved) ? saved : 'lucide';
+    },
+    set(name) {
+      if (!ICON_THEMES.includes(name) || name === this.current) return;
+      localStorage.setItem('wb_icon_theme', name);
+      location.reload();
+    },
+    isMascot() { return this.current === 'mascot'; }
+  };
+  WB.theme = theme;
+
   let _ids = null;
   function currentId() {
     const h = location.hash.replace(/^#\/?/, '');
@@ -99,6 +119,7 @@
   function closeDrawer() { appEl.classList.remove('drawer-open'); }
 
   async function init() {
+    theme.init();
     appEl = document.getElementById('app');
     sidebarEl = document.getElementById('sidebar');
     const initDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
