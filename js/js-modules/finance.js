@@ -18,67 +18,73 @@
 
   async function render(root) {
     let all = (await store.getAll('finance')).filter(i => !i._deleted);
-    const month = ui.fmtDate(Date.now()).slice(0, 7);
-    const monthItems = all.filter(i => (i.date || '').slice(0, 7) === month);
-    const income = monthItems.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
-    const expense = monthItems.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
-    const fixedSum = all.filter(i => i.fixed && i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
 
-    // 图表：本月支出分类
-    const catMap = {};
-    monthItems.filter(i => i.type === 'expense').forEach(i => {
-      const c = i.category || '其他';
-      catMap[c] = (catMap[c] || 0) + (+i.amount || 0);
-    });
-    const catRows = Object.keys(catMap).map(c => ({ label: c, value: catMap[c] })).sort((a, b) => b.value - a.value);
-    const catMax = Math.max.apply(null, catRows.map(r => r.value).concat([1]));
-    const catBars = catRows.length ? catRows.map(r => `
-      <div class="bar-row">
-        <span class="bar-label">${ui.escapeHtml(r.label)}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(r.value / catMax * 100).toFixed(1)}%"></div></div>
-        <span class="bar-val">${r.value.toFixed(2)}</span>
-      </div>`).join('') : ui.emptyState('本月暂无支出');
+    // 汇总计算（初始渲染与保存后局部刷新共用，避免刷新整页）
+    function computeSummary() {
+      const month = ui.fmtDate(Date.now()).slice(0, 7);
+      const monthItems = all.filter(i => (i.date || '').slice(0, 7) === month);
+      const income = monthItems.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
+      const expense = monthItems.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
+      const fixedSum = all.filter(i => i.fixed && i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
 
-    // 图表：近 6 个月收支趋势
-    const trend = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
-      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      const items = all.filter(x => (x.date || '').slice(0, 7) === ym);
-      const inc = items.filter(x => x.type === 'income').reduce((s, x) => s + (+x.amount || 0), 0);
-      const exp = items.filter(x => x.type === 'expense').reduce((s, x) => s + (+x.amount || 0), 0);
-      trend.push({ label: (d.getMonth() + 1) + '月', income: inc, expense: exp });
+      // 图表：本月支出分类
+      const catMap = {};
+      monthItems.filter(i => i.type === 'expense').forEach(i => {
+        const c = i.category || '其他';
+        catMap[c] = (catMap[c] || 0) + (+i.amount || 0);
+      });
+      const catRows = Object.keys(catMap).map(c => ({ label: c, value: catMap[c] })).sort((a, b) => b.value - a.value);
+      const catMax = Math.max.apply(null, catRows.map(r => r.value).concat([1]));
+      const catBars = catRows.length ? catRows.map(r => `
+        <div class="bar-row">
+          <span class="bar-label">${ui.escapeHtml(r.label)}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${(r.value / catMax * 100).toFixed(1)}%"></div></div>
+          <span class="bar-val">${r.value.toFixed(2)}</span>
+        </div>`).join('') : ui.emptyState('本月暂无支出');
+
+      // 图表：近 6 个月收支趋势
+      const trend = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+        const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        const items = all.filter(x => (x.date || '').slice(0, 7) === ym);
+        const inc = items.filter(x => x.type === 'income').reduce((s, x) => s + (+x.amount || 0), 0);
+        const exp = items.filter(x => x.type === 'expense').reduce((s, x) => s + (+x.amount || 0), 0);
+        trend.push({ label: (d.getMonth() + 1) + '月', income: inc, expense: exp });
+      }
+      const tMax = Math.max.apply(null, trend.flatMap(t => [t.income, t.expense]).concat([1]));
+      const trendHTML = `
+        <div class="trend">
+          ${trend.map(t => `
+            <div class="trend-col">
+              <div class="trend-bars">
+                <div class="trend-bar inc" title="收入 ${t.income.toFixed(2)}" style="height:${(t.income / tMax * 100).toFixed(1)}%"></div>
+                <div class="trend-bar exp" title="支出 ${t.expense.toFixed(2)}" style="height:${(t.expense / tMax * 100).toFixed(1)}%"></div>
+              </div>
+              <div class="trend-label">${t.label}</div>
+            </div>`).join('')}
+        </div>
+        <div class="trend-legend"><span class="lg inc">收入</span><span class="lg exp">支出</span></div>`;
+      return { income, expense, fixedSum, catBars, trendHTML };
     }
-    const tMax = Math.max.apply(null, trend.flatMap(t => [t.income, t.expense]).concat([1]));
-    const trendHTML = `
-      <div class="trend">
-        ${trend.map(t => `
-          <div class="trend-col">
-            <div class="trend-bars">
-              <div class="trend-bar inc" title="收入 ${t.income.toFixed(2)}" style="height:${(t.income / tMax * 100).toFixed(1)}%"></div>
-              <div class="trend-bar exp" title="支出 ${t.expense.toFixed(2)}" style="height:${(t.expense / tMax * 100).toFixed(1)}%"></div>
-            </div>
-            <div class="trend-label">${t.label}</div>
-          </div>`).join('')}
-      </div>
-      <div class="trend-legend"><span class="lg inc">收入</span><span class="lg exp">支出</span></div>`;
+    const summary = computeSummary();
 
     root.innerHTML = `
       <div class="page">
         ${ui.pageHead('wallet', '记账与成本', { actions: '<button class="btn primary" id="add">+ 记一笔</button>' })}
         <div class="stat-row">
-          <div class="stat"><div class="stat-num">${income.toFixed(2)}</div><div class="stat-label">本月收入</div></div>
-          <div class="stat"><div class="stat-num">${expense.toFixed(2)}</div><div class="stat-label">本月支出</div></div>
-          <div class="stat"><div class="stat-num ${income - expense < 0 ? 'neg' : ''}">${(income - expense).toFixed(2)}</div><div class="stat-label">结余</div></div>
-          <div class="stat"><div class="stat-num">${fixedSum.toFixed(2)}</div><div class="stat-label">固定月成本</div></div>
+          <div class="stat"><div class="stat-num" id="stat-income">${summary.income.toFixed(2)}</div><div class="stat-label">本月收入</div></div>
+          <div class="stat"><div class="stat-num" id="stat-expense">${summary.expense.toFixed(2)}</div><div class="stat-label">本月支出</div></div>
+          <div class="stat"><div class="stat-num ${summary.income - summary.expense < 0 ? 'neg' : ''}" id="stat-balance">${(summary.income - summary.expense).toFixed(2)}</div><div class="stat-label">结余</div></div>
+          <div class="stat"><div class="stat-num" id="stat-fixed">${summary.fixedSum.toFixed(2)}</div><div class="stat-label">固定月成本</div></div>
         </div>
         <section class="card section">
           <h2>本月支出分类</h2>
-          <div class="bars">${catBars}</div>
+          <div class="bars" id="cat-bars">${summary.catBars}</div>
         </section>
         <section class="card section">
           <h2>近 6 个月收支趋势</h2>
-          ${trendHTML}
+          <div id="trend">${summary.trendHTML}</div>
         </section>
         <div class="filters" id="filters">
           <button class="chip active" data-f="all">全部</button>
@@ -115,7 +121,18 @@
       if (ea) ea.onclick = () => openForm(null);
     }
     paint('all');
-    async function refresh() { all = (await store.getAll('finance')).filter(i => !i._deleted); paint(); }
+    async function refresh() {
+      all = (await store.getAll('finance')).filter(i => !i._deleted);
+      paint(); // 记录列表
+      const s = computeSummary(); // 统计卡 + 本月支出分类 + 近6个月趋势
+      const si = root.querySelector('#stat-income'); if (si) si.textContent = s.income.toFixed(2);
+      const se = root.querySelector('#stat-expense'); if (se) se.textContent = s.expense.toFixed(2);
+      const sb = root.querySelector('#stat-balance');
+      if (sb) { sb.textContent = (s.income - s.expense).toFixed(2); sb.classList.toggle('neg', s.income - s.expense < 0); }
+      const sf = root.querySelector('#stat-fixed'); if (sf) sf.textContent = s.fixedSum.toFixed(2);
+      const cb = root.querySelector('#cat-bars'); if (cb) cb.innerHTML = s.catBars;
+      const tr = root.querySelector('#trend'); if (tr) tr.innerHTML = s.trendHTML;
+    }
     root.querySelector('#filters').addEventListener('click', e => {
       if (!e.target.dataset.f) return;
       root.querySelectorAll('#filters .chip').forEach(c => c.classList.remove('active'));
