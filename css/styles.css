@@ -195,8 +195,18 @@ button { font-family: inherit; cursor: pointer; }
 .content-title, .plan-title { font-weight: 600; }
 .content-meta, .plan-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 12px; }
 .plan-note { margin-top: 6px; font-size: 13px; }
-.card.plan { align-items: flex-start; }
+.card.plan { align-items: flex-start; flex-wrap: wrap; }
 .card.plan .chk { margin-top: 1px; }
+.plan-body { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 12px; }
+.plan-prog { margin-top: 7px; font-size: 12px; }
+.plan-steps { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.plan-step { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 6px 9px; background: var(--surface-2); border-radius: 9px; }
+.plan-step .step-title { flex: 1; min-width: 0; }
+.plan-step.done .step-title { text-decoration: line-through; opacity: .6; }
+.plan-step .row-actions { margin-left: 0; gap: 2px; }
+.plan-step .row-actions .icon-btn { opacity: .55; }
+.plan-step .row-actions .icon-btn:hover { opacity: 1; }
+.add-step { flex-basis: 100%; margin-top: 8px; align-self: flex-start; }
 .st-done { opacity: .75; }
 .st-done .plan-title { text-decoration: line-through; }
 .badge.st-done { background: #e6f6ee; color: var(--success); }
