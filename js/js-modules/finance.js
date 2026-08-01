@@ -38,9 +38,24 @@
       const catBars = catRows.length ? catRows.map(r => `
         <div class="bar-row">
           <span class="bar-label">${ui.escapeHtml(r.label)}</span>
-          <div class="bar-track"><div class="bar-fill" style="width:${(r.value / catMax * 100).toFixed(1)}%"></div></div>
+          <div class="bar-track"><div class="bar-fill exp" style="width:${(r.value / catMax * 100).toFixed(1)}%"></div></div>
           <span class="bar-val">${r.value.toFixed(2)}</span>
         </div>`).join('') : ui.emptyState('本月暂无支出');
+
+      // 图表：本月收入分类
+      const incCatMap = {};
+      monthItems.filter(i => i.type === 'income').forEach(i => {
+        const c = i.category || '其他';
+        incCatMap[c] = (incCatMap[c] || 0) + (+i.amount || 0);
+      });
+      const incCatRows = Object.keys(incCatMap).map(c => ({ label: c, value: incCatMap[c] })).sort((a, b) => b.value - a.value);
+      const incCatMax = Math.max.apply(null, incCatRows.map(r => r.value).concat([1]));
+      const incCatBars = incCatRows.length ? incCatRows.map(r => `
+        <div class="bar-row">
+          <span class="bar-label">${ui.escapeHtml(r.label)}</span>
+          <div class="bar-track"><div class="bar-fill inc" style="width:${(r.value / incCatMax * 100).toFixed(1)}%"></div></div>
+          <span class="bar-val">${r.value.toFixed(2)}</span>
+        </div>`).join('') : ui.emptyState('本月暂无收入');
 
       // 图表：近 6 个月收支趋势
       const trend = [];
@@ -65,7 +80,7 @@
             </div>`).join('')}
         </div>
         <div class="trend-legend"><span class="lg inc">收入</span><span class="lg exp">支出</span></div>`;
-      return { income, expense, fixedSum, catBars, trendHTML };
+      return { income, expense, fixedSum, catBars, incCatBars, trendHTML };
     }
     const summary = computeSummary();
 
@@ -79,8 +94,17 @@
           <div class="stat"><div class="stat-num" id="stat-fixed">${summary.fixedSum.toFixed(2)}</div><div class="stat-label">固定月成本</div></div>
         </div>
         <section class="card section">
-          <h2>本月支出分类</h2>
-          <div class="bars" id="cat-bars">${summary.catBars}</div>
+          <h2>本月收入 / 支出分类</h2>
+          <div class="cat-split">
+            <div class="cat-half">
+              <div class="cat-half-head exp">支出</div>
+              <div class="bars" id="cat-bars">${summary.catBars}</div>
+            </div>
+            <div class="cat-half">
+              <div class="cat-half-head inc">收入</div>
+              <div class="bars" id="cat-inc-bars">${summary.incCatBars}</div>
+            </div>
+          </div>
         </section>
         <section class="card section">
           <h2>近 6 个月收支趋势</h2>
@@ -131,6 +155,7 @@
       if (sb) { sb.textContent = (s.income - s.expense).toFixed(2); sb.classList.toggle('neg', s.income - s.expense < 0); }
       const sf = root.querySelector('#stat-fixed'); if (sf) sf.textContent = s.fixedSum.toFixed(2);
       const cb = root.querySelector('#cat-bars'); if (cb) cb.innerHTML = s.catBars;
+      const cib = root.querySelector('#cat-inc-bars'); if (cib) cib.innerHTML = s.incCatBars;
       const tr = root.querySelector('#trend'); if (tr) tr.innerHTML = s.trendHTML;
     }
     root.querySelector('#filters').addEventListener('click', e => {
