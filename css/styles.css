@@ -320,7 +320,17 @@ button { font-family: inherit; cursor: pointer; }
 .bar-label { width: 64px; flex: 0 0 auto; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar-track { flex: 1; background: var(--surface-2); border-radius: 6px; height: 16px; overflow: hidden; }
 .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #7c75f0); border-radius: 6px; transition: width .3s; }
+.bar-fill.exp { background: linear-gradient(90deg, var(--danger), #ff8a8a); }
+.bar-fill.inc { background: linear-gradient(90deg, var(--success), #5fd39a); }
 .bar-val { width: 76px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+/* 记账：本月收入/支出分类 左右分栏 */
+.cat-split { display: flex; gap: 22px; }
+.cat-half { flex: 1; min-width: 0; }
+.cat-half-head { font-size: 13px; font-weight: 600; margin-bottom: 11px; }
+.cat-half-head.exp { color: var(--danger); }
+.cat-half-head.inc { color: var(--success); }
+@media (max-width: 560px) { .cat-split { flex-direction: column; gap: 16px; } }
 .trend { display: flex; align-items: flex-end; gap: 12px; height: 160px; padding-top: 8px; }
 .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
 .trend-bars { display: flex; gap: 4px; align-items: flex-end; height: 100%; width: 100%; justify-content: center; }
