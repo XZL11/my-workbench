@@ -106,7 +106,12 @@
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
-      if (e.target.closest('.icon-btn.del')) { ui.trash('content', id, { label: '已删除内容', repaint: refresh }); return; }
+      if (e.target.closest('.icon-btn.del')) {
+        if (await ui.confirm({ title: '删除内容', message: '确定删除这条内容吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+          ui.trash('content', id, { label: '已删除内容', repaint: refresh });
+        }
+        return;
+      }
       openForm(await store.get('content', id));
     });
   }
