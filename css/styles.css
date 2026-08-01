@@ -1228,4 +1228,14 @@ html.spidey-pixel .bar, html.spidey-pixel .progress {
   background: #0c1220; border: 2px solid #38bdf8; box-shadow: 4px 4px 0 rgba(0,0,0,.45);
 }
 html.spidey-pixel .bar > i, html.spidey-pixel .progress > i { background: linear-gradient(90deg, #E23636, #ff5a5a); }
+/* 首页倒挂蜘蛛侠横幅装饰 */
+.spidey-banner { width: 100%; text-align: center; margin: 8px 0 18px; }
+.spidey-banner img {
+  max-width: 100%;
+  height: auto;
+  max-height: 220px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 4px 0 rgba(0,0,0,.35));
+}
 
