@@ -87,7 +87,7 @@
     }
     (opts.actions || []).forEach(a => {
       const btn = document.createElement('button');
-      btn.className = 'btn ' + (a.primary ? 'primary' : (a.danger ? 'danger' : 'ghost'));
+      btn.className = 'btn ' + (a.primary ? 'primary' : 'ghost') + (a.danger ? ' danger' : '');
       btn.textContent = a.label;
       btn.onclick = async () => {
         if (a.onClick) {
@@ -109,15 +109,24 @@
     return { close, dialog };
   }
 
-  function confirm(msg) {
+  function confirm(opts) {
+    let title = '请确认', message = '', confirmLabel = '确定', cancelLabel = '取消', danger = false;
+    if (typeof opts === 'string') message = opts;
+    else if (opts) {
+      title = opts.title || title;
+      message = opts.message || '';
+      confirmLabel = opts.confirmLabel || confirmLabel;
+      cancelLabel = opts.cancelLabel || cancelLabel;
+      danger = !!opts.danger;
+    }
     return new Promise(resolve => {
       openModal({
-        title: '请确认',
-        html: '<p>' + escapeHtml(msg) + '</p>',
+        title,
+        html: '<p class="confirm-msg">' + escapeHtml(message) + '</p>',
         onDismiss: () => resolve(false), // 点背景关闭也正确 resolve，避免 Promise 永久挂起（CODE-REVIEW H1）
         actions: [
-          { label: '取消', onClick: (c) => { c(); resolve(false); } },
-          { label: '确定', primary: true, onClick: (c) => { c(); resolve(true); } }
+          { label: cancelLabel, onClick: (c) => { c(); resolve(false); } },
+          { label: confirmLabel, primary: true, danger, onClick: (c) => { c(); resolve(true); } }
         ]
       });
     });
