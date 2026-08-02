@@ -51,6 +51,12 @@
   };
 
   let _cache = null;
+  let usedMap = {}; // 选题「已使用」状态：{ "日期__id": true }
+
+  // 「已使用」状态持久化到 meta 仓库（随用户私有数据，刷新后保留）
+  function usedKey(date, id) { return (date || '') + '__' + (id || ''); }
+  async function loadUsed() { usedMap = (await store.getMeta('reco-used', {})) || {}; return usedMap; }
+  async function saveUsed() { await store.setMeta('reco-used', usedMap); }
 
   // 读取完整结构（含全部历史 days）；兼容旧的单日结构；失败时回退兜底
   async function _load() {
@@ -122,19 +128,26 @@
       </div>`).join('');
   }
 
-  function topicHTML(t) {
-    return `<div class="card reco" data-id="${ui.escapeHtml(t.id)}">
-      <div class="reco-head">
-        <div class="reco-title">${ui.escapeHtml(t.title)}</div>
-        <button class="btn primary xs copy-all" data-id="${ui.escapeHtml(t.id)}">复制全部</button>
+  function topicHTML(t, date, used) {
+    return `<div class="card reco ${used ? 'used' : ''}" data-id="${ui.escapeHtml(t.id)}" data-date="${ui.escapeHtml(date)}">
+      <input type="checkbox" class="chk" ${used ? 'checked' : ''} title="标记为已使用">
+      <div class="reco-body">
+        <div class="reco-head">
+          <div class="reco-title">${ui.escapeHtml(t.title)}</div>
+          <div class="reco-head-actions">
+            <span class="badge used-badge">已使用</span>
+            <button class="btn primary xs copy-all" data-id="${ui.escapeHtml(t.id)}">复制全部</button>
+          </div>
+        </div>
+        <div class="reco-tags">${tagsHTML(t.tags)}</div>
+        <div class="reco-copies">${copiesHTML(t.copies)}</div>
       </div>
-      <div class="reco-tags">${tagsHTML(t.tags)}</div>
-      <div class="reco-copies">${copiesHTML(t.copies)}</div>
     </div>`;
   }
 
   async function render(root) {
     const full = await _load();
+    await loadUsed(); // 载入「已使用」标记
     const days = sortDays(full.days);
 
     root.innerHTML = ui.pageHead('bulb', '选题推荐', {
@@ -171,7 +184,7 @@
         if ((t.title || '').toLowerCase().includes(filter)) return true;
         return (t.tags || []).some(tag => tag.toLowerCase().includes(filter));
       });
-      listEl.innerHTML = topics.length ? topics.map(topicHTML).join('') : ui.emptyState('没有匹配的选题');
+      listEl.innerHTML = topics.length ? topics.map(t => topicHTML(t, current.date, !!usedMap[usedKey(current.date, t.id)])).join('') : ui.emptyState('没有匹配的选题');
     }
 
     function setDay(date) {
@@ -186,8 +199,18 @@
     dateSel.addEventListener('change', () => setDay(dateSel.value));
     searchEl.addEventListener('input', () => paint(searchEl.value));
 
-    // 复制按钮（事件委托）
-    listEl.addEventListener('click', e => {
+    // 复制按钮 + 已使用标记（事件委托）
+    listEl.addEventListener('click', async e => {
+      const chk = e.target.closest('.chk');
+      if (chk) {
+        const card = chk.closest('.card.reco');
+        const date = card.dataset.date, id = card.dataset.id;
+        const key = usedKey(date, id);
+        if (chk.checked) usedMap[key] = true; else delete usedMap[key];
+        card.classList.toggle('used', chk.checked);
+        await saveUsed(); // 持久化，刷新后保留
+        return;
+      }
       const one = e.target.closest('.copy-one');
       if (one) { copyText(decodeURIComponent(one.dataset.copy), '文案已复制'); return; }
       const all = e.target.closest('.copy-all');
@@ -201,6 +224,6 @@
     });
   }
 
-  WB.recommend = { render, getDaily, _load };
+  WB.recommend = { render, getDaily, _load, getUsedMap: loadUsed };
   WB.modules.push({ id: 'recommend', title: '选题推荐', icon: 'bulb', render });
 })(window.WB = window.WB || {});
