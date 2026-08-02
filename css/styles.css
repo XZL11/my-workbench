@@ -1043,6 +1043,28 @@ body {
 .reco-mini:hover { border-color: var(--muted); }
 .rm-num { font-size: 12px; color: var(--primary); flex: 0 0 auto; font-weight: 600; }
 
+/* 选题「已使用」标记 */
+.card.reco { align-items: flex-start; }
+.card.reco .reco-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.card.reco .chk { margin-top: 2px; flex: 0 0 auto; }
+.reco-head-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.used-badge { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  background: color-mix(in srgb, #22c55e 16%, transparent); color: #16a34a;
+  border: 1px solid color-mix(in srgb, #22c55e 42%, transparent); }
+.card.reco:not(.used) .used-badge { display: none; }
+.card.reco.used { background: color-mix(in srgb, var(--surface) 86%, #9ca3af); }
+.card.reco.used .reco-title,
+.card.reco.used .reco-copies { transition: opacity .2s; }
+.card.reco.used .reco-title { text-decoration: line-through; opacity: .58; }
+.card.reco.used .reco-tags,
+.card.reco.used .reco-copies { opacity: .62; }
+
+/* 首页选题面板：已使用的小项也做弱化呈现 */
+.reco-mini.used .rm-title { text-decoration: line-through; opacity: .55; }
+.reco-mini.used { background: color-mix(in srgb, var(--surface) 88%, #9ca3af); }
+.reco-mini .rm-used { font-size: 11px; font-weight: 700; color: #16a34a; flex: 0 0 auto; }
+
+
 /* T1 吉祥物图标主题 */
 .ic-mascot {
   display: inline-block;
