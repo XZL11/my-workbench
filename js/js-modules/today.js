@@ -168,9 +168,14 @@
       if (!el || !WB.recommend) return;
       let data;
       try { data = await WB.recommend.getDaily(); } catch (e) { el.innerHTML = ui.emptyState('选题加载失败'); return; }
+      let usedMap = {};
+      try { usedMap = await WB.recommend.getUsedMap(); } catch (e) { usedMap = {}; }
       const topics = (data.topics || []).slice(0, 3);
       el.innerHTML = `<div class="reco-summary"><span class="muted">${ui.escapeHtml(data.date || '')} · 共 ${(data.topics || []).length} 个选题</span></div>` +
-        (topics.length ? topics.map(t => `<div class="reco-mini" data-go="recommend"><span class="rm-title">${ui.escapeHtml(t.title)}</span><span class="rm-num">${(t.copies || []).length}组</span></div>`).join('') : '<div class="muted" style="font-size:13px">暂无推荐</div>');
+        (topics.length ? topics.map(t => {
+          const used = !!usedMap[(data.date || '') + '__' + t.id];
+          return `<div class="reco-mini ${used ? 'used' : ''}" data-go="recommend"><span class="rm-title">${ui.escapeHtml(t.title)}</span>${used ? '<span class="rm-used">已用</span>' : ''}<span class="rm-num">${(t.copies || []).length}组</span></div>`;
+        }).join('') : '<div class="muted" style="font-size:13px">暂无推荐</div>');
     }
 
     const spideyBanner = (WB.theme && WB.theme.isSpidey && WB.theme.isSpidey())
