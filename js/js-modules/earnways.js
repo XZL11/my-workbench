@@ -166,7 +166,46 @@
 
     root.querySelector('#add').onclick = () => openForm(null);
 
-    // 卡片交互（编辑/删除）
+    // 浏览具体信息（点击卡片内容区域）
+    function openDetail(d) {
+      const stLabel = STATUS[d.status] || STATUS.idea;
+      const levelLabel = LEVELS[d.level] || LEVELS[1];
+      const rows = [
+        ['分类', d.cat || '其他'],
+        ['平台 / 渠道', d.platform || '—'],
+        ['状态', stLabel],
+        ['难度', levelLabel],
+        ['预期月收益', '¥' + fmt(d.income) + ' /月'],
+        ['投入成本', d.cost ? '¥' + fmt(d.cost) : '—'],
+        ['回本周期', d.payback ? (fmt(d.payback) + (d.paybackUnit || '月')) : '—']
+      ];
+      const kv = rows.map(([k, v]) =>
+        `<div class="ew-kv"><span class="k">${ui.escapeHtml(k)}</span><span class="v">${ui.escapeHtml(String(v))}</span></div>`
+      ).join('');
+      ui.openModal({
+        title: d.name,
+        html: `<div class="ew-detail">
+          <div class="ew-detail-head">
+            <span class="badge st-${d.status}">${stLabel}</span>
+            ${d.cat ? `<span class="badge">${ui.escapeHtml(d.cat)}</span>` : ''}
+          </div>
+          <div class="ew-kv-grid">${kv}</div>
+          ${d.note ? `<div class="ew-note-detail"><div class="k">备注 / 步骤</div><div class="nt">${ui.escapeHtml(d.note)}</div></div>` : ''}
+        </div>`,
+        actions: [
+          { label: '取消' },
+          { label: '删除', danger: true, onClick: async (close) => {
+            if (await ui.confirm({ title: '删除门路', message: '确定删除这条赚钱门路吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
+              ui.trash('earnways', d.id, { label: '已删除门路', repaint: refresh });
+              close();
+            }
+          } },
+          { label: '编辑', primary: true, onClick: (close) => { close(); openForm(d); } }
+        ]
+      });
+    }
+
+    // 卡片交互（编辑/删除/点开详情）
     listEl.addEventListener('click', async e => {
       const card = e.target.closest('.card'); if (!card) return;
       const id = card.dataset.id;
@@ -177,6 +216,10 @@
         }
         return;
       }
+      // 点击卡片其他区域 → 浏览具体信息
+      if (e.target.closest('.icon-btn')) return;
+      const d = await store.get('earnways', id);
+      if (d) openDetail(d);
     });
   }
 
