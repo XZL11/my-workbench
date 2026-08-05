@@ -205,6 +205,17 @@ button { font-family: inherit; cursor: pointer; }
 .earn-overview { padding: 2px 0; }
 .earn-ov-row { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .earn-ov-row b { font-weight: 700; }
+/* 赚钱门路：点击卡片浏览详情 */
+.card.ew { cursor: pointer; }
+.ew-detail { font-size: 14px; }
+.ew-detail-head { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.ew-kv-grid { display: flex; flex-direction: column; gap: 10px; }
+.ew-kv { display: flex; gap: 12px; align-items: baseline; }
+.ew-kv .k { width: 88px; flex: 0 0 auto; color: var(--muted); }
+.ew-kv .v { font-weight: 600; }
+.ew-note-detail { margin-top: 14px; }
+.ew-note-detail .k { color: var(--muted); margin-bottom: 4px; }
+.ew-note-detail .nt { white-space: pre-wrap; line-height: 1.55; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
 
 /* 记账 */
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
