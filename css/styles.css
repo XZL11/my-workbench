@@ -176,6 +176,36 @@ button { font-family: inherit; cursor: pointer; }
 .bm-title { font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 12px; }
 
+/* 赚钱门路 */
+.search {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 11px;
+  padding: 7px 12px; flex: 1; min-width: 180px;
+}
+.search input { background: none; border: none; outline: none; color: var(--text); font-size: 14px; width: 100%; }
+.search input::placeholder { color: var(--muted); }
+.ew { align-items: flex-start; }
+.ew-fav { width: 40px; height: 40px; border-radius: 10px; background: rgba(47,163,107,.1); color: var(--success);
+  display: grid; place-items: center; flex: 0 0 auto; }
+.ew-main { flex: 1; min-width: 0; }
+.ew-title { font-weight: 650; font-size: 15px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ew-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 5px; font-size: 12px; }
+.ew-row { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.ew-row.ew-sub { gap: 8px; }
+.ew-income { font-size: 14px; font-weight: 700; color: var(--success); font-variant-numeric: tabular-nums; }
+.ew-income small { font-weight: 400; color: var(--muted); font-size: 11px; }
+.ew-stars { color: var(--warn); font-size: 13px; letter-spacing: .5px; }
+.ew-note { margin-top: 6px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.ew-live { border-color: var(--success); box-shadow: 0 0 0 1px var(--success) inset; }
+.badge.st-try { background: rgba(217,147,10,.14); color: var(--warn); }
+.badge.st-live { background: rgba(47,163,107,.16); color: var(--success); }
+.badge.st-drop { background: rgba(229,72,77,.14); color: var(--danger); }
+.stat-num.pos { color: var(--success); }
+/* 今日面板：赚钱门路概览 */
+.earn-overview { padding: 2px 0; }
+.earn-ov-row { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.earn-ov-row b { font-weight: 700; }
+
 /* 记账 */
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
@@ -1348,4 +1378,8 @@ html.spidey-pixel .sidebar,
 html.spidey-pixel .bottomtabs {
   background-color: transparent;
 }
+/* 赚钱门路：蜘蛛侠主题适配（图标底色 + 收入色 + 已变现高亮） */
+html.spidey-pixel .ew-fav { background: rgba(56,189,248,.18); color: var(--accent); }
+html.spidey-pixel .ew-income { color: #5fd39a; } /* 偏青绿，在深蓝底上更醒目 */
+html.spidey-pixel .ew-live { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf8 inset; } /* 青色高亮，与主题一致 */
 
