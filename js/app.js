@@ -6,8 +6,8 @@
 
   // T1 图标主题：lucide（默认 SVG） / mascot（猪猪侠吉祥物 PNG） / spidey（蜘蛛侠像素 PNG）
   const ICON_THEMES = ['lucide', 'mascot', 'spidey'];
-  const MASCOT_NAMES = ['today','tasks','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings'];
-  const SPIDEY_NAMES = ['today','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings'];
+  const MASCOT_NAMES = ['today','tasks','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings','earnways'];
+  const SPIDEY_NAMES = ['today','calendar','notes','habits','bookmarks','finance','content','planning','reading','recommend','settings','earnways'];
   const theme = {
     current: 'lucide',
     list: ICON_THEMES,
