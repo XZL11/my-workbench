@@ -64,6 +64,7 @@
     const planning = (await store.getAll('planning')).filter(i => !i._deleted);
     const notes = (await store.getAll('notes')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
     const bookmarks = (await store.getAll('bookmarks')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
+    const earnways = (await store.getAll('earnways')).filter(i => !i._deleted);
     let readings = (await store.getAll('reading')).filter(i => i && i.id && i.id !== 'stat');
     let readingStat = (await store.getAll('reading')).find(i => i && i.id === 'stat') || {};
 
@@ -178,6 +179,21 @@
         }).join('') : '<div class="muted" style="font-size:13px">暂无推荐</div>');
     }
 
+    function earnwaysPanelHTML(ew) {
+      const total = ew.length;
+      const live = ew.filter(d => d.status === 'live').length;
+      const tryCount = ew.filter(d => d.status === 'try').length;
+      const liveIncome = ew.filter(d => d.status === 'live').reduce((s, d) => s + (+d.income || 0), 0);
+      return `<div class="earn-overview">
+        <div class="earn-ov-row">
+          <span><b>${total}</b> 门路</span>
+          <span><b class="pos">${live}</b> 已变现</span>
+          <span><b>${tryCount}</b> 尝试中</span>
+          <span>预期月收益 <b class="pos">¥${liveIncome.toLocaleString('zh-CN')}</b></span>
+        </div>
+      </div>`;
+    }
+
     const spideyBanner = (WB.theme && WB.theme.isSpidey && WB.theme.isSpidey())
       ? '<div class="spidey-banner"><img src="assets/spidey-banner.png" alt="" loading="lazy"></div>'
       : '';
@@ -202,6 +218,7 @@
           ${panelHTML('bookmark', '最近书签', bmHTML, 'bookmarks', '', 'p-bookmarks')}
           ${panelHTML('book', '阅读', readingPanelHTML(), 'reading', '', 'p-reading')}
           ${panelHTML('bulb', '选题推荐', recommendPanelHTML(), 'recommend', '', 'p-recommend')}
+          ${panelHTML('coins', '赚钱门路', earnwaysPanelHTML(earnways), 'earnways', '', 'p-earnways')}
         </div>
       </div>`;
 
@@ -368,8 +385,14 @@
         if (body) body.innerHTML = readingPanelHTML();
         return;
       }
+      if (name === 'earnways') {
+        const allEw = (await store.getAll('earnways')).filter(i => !i._deleted);
+        const body = root.querySelector('#p-earnways');
+        if (body) body.innerHTML = earnwaysPanelHTML(allEw);
+        return;
+      }
     }
-    ['tasks', 'habits', 'habitlogs', 'finance', 'content', 'planning', 'notes', 'bookmarks', 'reading'].forEach(name => store.subscribe(name, () => liveRepaint(name)));
+    ['tasks', 'habits', 'habitlogs', 'finance', 'content', 'planning', 'notes', 'bookmarks', 'reading', 'earnways'].forEach(name => store.subscribe(name, () => liveRepaint(name)));
   }
 
   WB.modules.unshift({ id: 'today', title: '今日', icon: 'home', render });
