@@ -86,7 +86,7 @@
     function openForm(n) {
       const m = ui.openModal({
         title: n ? '编辑' : '新建笔记',
-        html: ui.form(formFields(n)) + '<div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml((n && n.body) || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
+        html: ui.form(formFields(n)) + '<div class="ai-bar"><button type="button" class="btn ghost sm" id="ai-sum">✨ AI 摘要</button><button type="button" class="btn ghost sm" id="ai-script">✨ 改写口播稿</button></div><div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml((n && n.body) || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -106,6 +106,28 @@
       const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
       ta.addEventListener('input', upd); upd();
       ui.bindFormValidation(m.dialog);
+      m.dialog.querySelector('#ai-sum').onclick = () => {
+        const src = ta.value.trim();
+        if (!src) { ui.toast('请先写点内容再摘要', 'warn'); return; }
+        WB.ai.assistModal({
+          title: 'AI 摘要',
+          system: '你是一个简洁的中文摘要助手。把用户给出的笔记内容压缩成 3-5 条要点摘要，使用中文，保留关键信息，不要发挥。',
+          user: '请摘要以下内容：\n\n' + src,
+          adoptLabel: '替换正文',
+          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已替换为摘要'); }
+        });
+      };
+      m.dialog.querySelector('#ai-script').onclick = () => {
+        const src = ta.value.trim();
+        if (!src) { ui.toast('请先写点内容', 'warn'); return; }
+        WB.ai.assistModal({
+          title: 'AI 改写口播稿',
+          system: '你是一个自媒体口播稿改写助手。把用户给出的内容改写成适合念出来的口播稿：口语化、有开头钩子和结尾引导，分段清晰，中文。',
+          user: '请把以下内容改写成口播稿：\n\n' + src,
+          adoptLabel: '替换正文',
+          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已替换为口播稿'); }
+        });
+      };
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     function openView(n) {
@@ -124,6 +146,16 @@
           </div>`,
         actions: [
           { label: '关闭' },
+          { label: '✨ AI 摘要', onClick: () => {
+            const src = (n && n.body) || '';
+            if (!src.trim()) { ui.toast('笔记内容为空', 'warn'); return false; }
+            WB.ai.assistModal({
+              title: 'AI 摘要：' + (n.title || ''),
+              system: '你是一个简洁的中文摘要助手。把用户给出的笔记内容压缩成 3-5 条要点摘要，使用中文，保留关键信息，不要发挥。',
+              user: '请摘要以下内容：\n\n' + src
+            });
+            return false; // 保持查看弹窗打开
+          } },
           { label: '编辑', primary: true, onClick: (close) => { close(); openForm(n); } }
         ]
       });
