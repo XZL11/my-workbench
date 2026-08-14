@@ -62,6 +62,7 @@
               ${prog}
             </div>
             <div class="row-actions">
+              <button class="icon-btn ai" title="AI 建议">${ui.icon('sparkles', 16)}</button>
               <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
               <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
             </div>
@@ -125,6 +126,29 @@
       setTimeout(() => m.dialog.querySelector('#f-step').focus(), 50);
     }
 
+    // AI 进度建议：基于规划现状给出下一步可执行建议，可一键「采纳为环节」
+    function openAiSuggest(p) {
+      const steps = (p.steps || []).map(s => s.title).join('、') || '（暂无）';
+      const sys = '你是一个目标规划教练。根据用户给出的规划（标题/类型/状态/截止日期/备注/已有环节），给出下一步可执行的具体建议：用中文，每条一行，控制在 5-8 条，务实、可落地，避免空话。';
+      const user = '规划标题：' + (p.title || '') + '\n类型：' + (TYPE[p.type] || p.type) +
+        '\n状态：' + (STATUS[p.status] || p.status) + (p.dueDate ? ('\n截止：' + p.dueDate) : '') +
+        (p.note ? ('\n备注：' + p.note) : '') + '\n已有环节：' + steps +
+        '\n\n请给出下一步建议（每行一条）：';
+      WB.ai.assistModal({
+        title: 'AI 建议：' + (p.title || ''),
+        system: sys,
+        user: user,
+        adoptLabel: '采纳为环节',
+        onAdopt: (txt) => {
+          const lines = WB.ai.parseLines(txt);
+          if (!lines.length) { ui.toast('没有可采纳的建议', 'warn'); return; }
+          p.steps = p.steps || [];
+          lines.forEach(t => p.steps.push({ id: store.uid(), title: t, done: false }));
+          store.put('planning', p).then(() => { paint(currentFilter); ui.toast('已添加 ' + lines.length + ' 个环节'); });
+        }
+      });
+    }
+
     list.addEventListener('click', async e => {
       const card = e.target.closest('.card.plan'); if (!card) return;
       const id = card.dataset.id;
@@ -158,6 +182,8 @@
         }
         if (e.target.closest('.step-edit') || e.target.closest('.step-title')) { openStepForm(p, stepId); return; }
       }
+      // AI 建议
+      if (e.target.closest('.icon-btn.ai')) { openAiSuggest(p); return; }
       // 删除规划
       if (e.target.closest('.icon-btn.del')) {
         if (await ui.confirm({ title: '删除规划', message: '确定删除这条规划吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
