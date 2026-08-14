@@ -1428,6 +1428,29 @@ html.spidey-pixel .ai-bar .btn:hover { background: rgba(56,189,248,.16); }
 html.spidey-pixel .icon-btn.ai { color: #7dd3fc; }
 html.spidey-pixel .icon-btn.ai:hover { background: rgba(56,189,248,.16); }
 html.spidey-pixel .todo-sub input { accent-color: #38bdf8; }
+
+/* 笔记：列表卡片已存摘要提示行 */
+.note-sum { font-size: 12.5px; line-height: 1.5; color: var(--primary); margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.note-sum mark { background: var(--primary-weak); color: var(--primary); border-radius: 3px; padding: 0 2px; }
+
+/* 笔记查看：AI 摘要块（自动生成 + 持久化） */
+.note-summary { border: 1px solid var(--primary); background: var(--primary-weak);
+  border-radius: var(--radius-sm); padding: 10px 12px; margin: 12px 0; }
+.note-summary-head { font-size: 12.5px; font-weight: 600; color: var(--primary); margin-bottom: 6px; }
+.note-summary-head .spark { margin-right: 4px; }
+.note-summary-body { font-size: 13.5px; line-height: 1.65; color: var(--text); }
+.note-summary-body p { margin: 4px 0; }
+.note-summary-body ul { margin: 4px 0; padding-left: 18px; }
+
+/* 表单内提示文字 */
+.hint { font-size: 12.5px; margin: 8px 0 2px; line-height: 1.5; }
+
+/* 蜘蛛侠主题：笔记摘要青色高亮 */
+html.spidey-pixel .note-sum { color: #7dd3fc; }
+html.spidey-pixel .note-sum mark { background: rgba(56,189,248,.16); color: #bae6fd; }
+html.spidey-pixel .note-summary { border-color: #38bdf8; background: rgba(56,189,248,.12); }
+html.spidey-pixel .note-summary-head { color: #bae6fd; }
 html.spidey-pixel .todo-subprog { background: rgba(56,189,248,.18); color: #7dd3fc; }
 html.spidey-pixel .ai-dot { background: #38bdf8; }
 
