@@ -29,6 +29,8 @@
       </div>
       <label>标签（逗号分隔）<input id="f-tags" class="input" value="${ui.escapeHtml((t.tags || []).join(', '))}" placeholder="工作, 紧急"></label>
       <label>备注<textarea id="f-note" class="input" rows="2">${ui.escapeHtml(t.note || '')}</textarea></label>
+      <div class="task-subs" id="task-subs"></div>
+      <div class="ai-bar"><button type="button" class="btn ghost sm" id="ai-break">✨ AI 拆解子任务</button></div>
     </div>`;
   }
 
@@ -122,6 +124,7 @@
 
     function openTaskForm(t, dueDate) {
       const defaultDue = (t && t.dueDate) || dueDate || ui.fmtDate(Date.now());
+      let subtasks = (t && t.subtasks) ? t.subtasks.slice() : [];
       const m = ui.openModal({
         title: t ? '编辑待办' : '新建待办', html: taskFormHTML(t, defaultDue),
         actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
@@ -133,12 +136,44 @@
           obj.dueDate = m.dialog.querySelector('#f-due').value || defaultDue;
           obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
           obj.note = m.dialog.querySelector('#f-note').value;
+          obj.subtasks = subtasks;
           await store.put('tasks', obj); close();
           tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
           paint();
           if (dd.classList.contains('open')) paintDay(dd.dataset.key);
         } }]
       });
+      function renderSubs() {
+        const box = m.dialog.querySelector('#task-subs');
+        if (!box) return;
+        box.innerHTML = subtasks.length ? subtasks.map(s =>
+          '<div class="task-sub" data-sub="' + s.id + '"><span>' + ui.escapeHtml(s.title) + '</span>' +
+          '<button type="button" class="icon-btn sub-del" title="移除">×</button></div>').join('')
+          : '<div class="muted" style="font-size:12px">暂无子任务，点上方「✨ AI 拆解子任务」自动生成，或保存后在待办中勾选。</div>';
+      }
+      renderSubs();
+      m.dialog.querySelector('#task-subs').addEventListener('click', e => {
+        const del = e.target.closest('.sub-del');
+        if (del) { const id = del.closest('.task-sub').dataset.sub; subtasks = subtasks.filter(s => s.id !== id); renderSubs(); }
+      });
+      m.dialog.querySelector('#ai-break').onclick = () => {
+        const title = m.dialog.querySelector('#f-title').value.trim();
+        const note = m.dialog.querySelector('#f-note').value.trim();
+        if (!title) { ui.toast('请先填写待办标题', 'warn'); return; }
+        WB.ai.assistModal({
+          title: 'AI 拆解：' + title,
+          system: '你是一个任务拆解助手。把用户给出的一项待办，拆解成具体、可独立执行的小步骤。用中文，每条一行，3-6 条，务实、可操作，避免空泛。',
+          user: '待办：' + title + (note ? ('\n背景：' + note) : '') + '\n\n请拆解为执行步骤（每行一条）：',
+          adoptLabel: '采纳为子任务',
+          onAdopt: (txt) => {
+            const lines = WB.ai.parseLines(txt);
+            if (!lines.length) { ui.toast('没有可采纳的子任务', 'warn'); return; }
+            lines.forEach(x => subtasks.push({ id: store.uid(), title: x, done: false }));
+            renderSubs();
+            ui.toast('已添加 ' + lines.length + ' 个子任务，保存后生效');
+          }
+        });
+      };
       if (!t) setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
 
@@ -168,16 +203,24 @@
       const logMap = {}; logs.forEach(l => { if (l && l.id) logMap[l.id] = l; });
 
       // 当日待办 = 当天待办（待办即日程：统一为 tasks 单一数据源，不再混入 legacy 事件）
-      const dayHTML = dayTasks.length ? dayTasks.map(t => `
+      const dayHTML = dayTasks.length ? dayTasks.map(t => {
+        const subs = t.subtasks || [];
+        const doneSubs = subs.filter(s => s.done).length;
+        const subProg = subs.length ? ' <span class="todo-subprog">' + doneSubs + '/' + subs.length + '</span>' : '';
+        const subHtml = subs.length ? '<div class="todo-subs">' + subs.map(s =>
+          '<label class="todo-sub ' + (s.done ? 'done' : '') + '"><input type="checkbox" class="sub-chk" data-sub="' + s.id + '" ' + (s.done ? 'checked' : '') + '><span>' + ui.escapeHtml(s.title) + '</span></label>').join('') + '</div>' : '';
+        return `
         <div class="dd-item todo ${t.done ? 'done' : ''}" data-id="${t.id}">
           <input type="checkbox" class="chk" ${t.done ? 'checked' : ''}>
           <div class="dd-body"><div class="dd-title">${ui.escapeHtml(t.title)}</div>
-          <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span></div></div>
+          <div class="task-meta"><span class="pri pri-${t.priority}">${PRI[t.priority] || '中'}</span>${subProg}</div>
+          ${subHtml}</div>
           <div class="row-actions">
             <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
             <button class="icon-btn del" title="删除">${ui.icon('trash', 16)}</button>
           </div>
-        </div>`).join('') : ui.emptyState('这一天还没有待办');
+        </div>`;
+      }).join('') : ui.emptyState('这一天还没有待办');
 
       const habitHTML = habits.length ? habits.map(h => {
         const rec = logMap[h.id + ':' + dateKey]; const done = rec && rec.done;
@@ -217,6 +260,20 @@
           if (t) { t.done = checked; await store.put('tasks', t); }
           paintDay(dd.dataset.key); // 当日待办实时反映勾选/取消
           paint(); // 同步刷新月视图该任务状态
+          return;
+        }
+        // 子任务勾选：联动完成态
+        if (e.target.classList.contains('sub-chk')) {
+          const t = await store.get('tasks', tid);
+          if (!t) return;
+          const sub = (t.subtasks || []).find(s => s.id === e.target.dataset.sub);
+          if (sub) {
+            sub.done = e.target.checked;
+            if (t.subtasks && t.subtasks.length && t.subtasks.every(s => s.done)) t.done = true;
+            await store.put('tasks', t);
+            const idx = tasks.findIndex(x => x.id === tid); if (idx >= 0) tasks[idx] = t;
+            paintDay(dd.dataset.key); paint();
+          }
           return;
         }
         if (e.target.closest('.icon-btn.del')) {
