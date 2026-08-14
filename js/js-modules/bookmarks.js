@@ -2,6 +2,7 @@
 (function (WB) {
   'use strict';
   const store = WB.store, ui = WB.ui;
+  const BM_AI_SYSTEM = '你是书签整理助手。根据用户给出的网页链接 URL 和标题，生成：summary（一句话中文摘要，不超过 40 字）、tags（2-4 个中文标签数组，用于分类检索）。只输出 JSON（不要解释、不要代码块）。示例：输入 URL「https://example.com/ai」标题「AI 入门」→{"summary":"介绍人工智能基础概念的入门文章","tags":["AI","学习","教程"]}。';
 
   function formFields(b) {
     b = b || {};
@@ -55,7 +56,9 @@
     function openForm(b) {
       const m = ui.openModal({
         title: b ? '编辑书签' : '新建书签',
-        html: ui.form(formFields(b)),
+        html: ui.form(formFields(b)) +
+          '<div class="ai-bar"><button type="button" class="btn ghost sm" id="ai-bm">✨ AI 摘要+标签</button></div>' +
+          '<div class="hint muted">填好标题/链接后点此，AI 自动生成一句话摘要并建议分类标签。</div>',
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -71,6 +74,24 @@
         ]
       });
       ui.bindFormValidation(m.dialog);
+      m.dialog.querySelector('#ai-bm').onclick = async () => {
+        const url = m.dialog.querySelector('#f-url').value.trim();
+        const title = m.dialog.querySelector('#f-title').value.trim();
+        if (!title && !url) { ui.toast('请先填写标题或链接', 'warn'); return; }
+        if (!(await WB.ai.isConfigured())) { ui.toast('请先到「设置 → AI 助手」配置 API Key', 'warn'); setTimeout(() => { location.hash = '#/settings'; }, 400); return; }
+        const btn = m.dialog.querySelector('#ai-bm');
+        const old = btn.textContent; btn.disabled = true; btn.textContent = '生成中…';
+        try {
+          const parsed = WB.ai.parseJSON(await WB.ai.ask(BM_AI_SYSTEM, 'URL：' + (url || '（无）') + '\n标题：' + (title || '（无）')));
+          if (parsed) {
+            const tags = Array.isArray(parsed.tags) ? parsed.tags.filter(Boolean) : [];
+            m.dialog.querySelector('#f-note').value = (parsed.summary || '') + (tags.length ? '  #' + tags.join(' #') : '');
+            if (tags.length && !m.dialog.querySelector('#f-cat').value.trim()) m.dialog.querySelector('#f-cat').value = tags[0];
+            ui.toast('已生成摘要与标签，请确认');
+          } else { ui.toast('AI 返回格式异常，请重试', 'warn'); }
+        } catch (e) { ui.toast('AI 生成失败：' + e.message, 'error'); }
+        finally { btn.disabled = false; btn.textContent = old; }
+      };
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
