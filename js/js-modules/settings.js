@@ -1,7 +1,7 @@
 // module: settings 设置（同步配置 / 主题 / 导入导出）
 (function (WB) {
   'use strict';
-  const store = WB.store, ui = WB.ui, sync = WB.sync;
+  const store = WB.store, ui = WB.ui, sync = WB.sync, ai = WB.ai;
 
   const PLATFORM_HELP = {
     github: '在 GitHub 生成一个具有 <b>repo</b> 权限的 Personal Access Token（ghp_...），并准备一个<strong>私有仓库</strong>。Token 仅保存在本机浏览器。',
@@ -73,6 +73,24 @@
         </section>
 
         <section class="card section">
+          <h2>AI 助手</h2>
+          <p class="muted">配置你自己的大模型 API（硅基流动 / DeepSeek / OpenAI 兼容）。密钥仅保存在本机浏览器，不会上传到任何仓库；未配置时其它功能照常使用。</p>
+          <label>服务商
+            <select id="ai-provider" class="input">
+              ${Object.keys(ai.PRESETS).map(k => `<option value="${k}">${ai.PRESETS[k].label}</option>`).join('')}
+            </select>
+          </label>
+          <label>接口地址（Base URL）<input id="ai-baseurl" class="input" placeholder="https://api.siliconflow.cn/v1"></label>
+          <label>模型名<input id="ai-model" class="input" placeholder="deepseek-ai/DeepSeek-V3"></label>
+          <label>API Key<input id="ai-apikey" class="input" type="password" placeholder="sk-...（已保存则留空保留）"></label>
+          <div class="row-actions">
+            <button class="btn primary" id="ai-save">保存 AI 配置</button>
+            <button class="btn ghost" id="ai-test">测试连接</button>
+          </div>
+          <div class="sync-stat" id="ai-stat"></div>
+        </section>
+
+        <section class="card section">
           <h2>关于</h2>
           <p class="muted">个人工作台 · 纯静态 PWA · 离线优先 · 数据存于本地与私有仓库。<br>所有数据默认仅存在于你的设备与你的私有仓库（GitHub 或 Gitee）。</p>
         </section>
@@ -115,6 +133,55 @@
     root.querySelector('#s-icon-theme').addEventListener('change', e => {
       if (WB.theme && WB.theme.set) { WB.theme.set(e.target.value); }
     });
+
+    // ===== AI 助手配置 =====
+    const aiStat = root.querySelector('#ai-stat');
+    const aiProvider = root.querySelector('#ai-provider');
+    const aiBase = root.querySelector('#ai-baseurl');
+    const aiModel = root.querySelector('#ai-model');
+    const aiKey = root.querySelector('#ai-apikey');
+    async function loadAiCfg() {
+      const cfg = await ai.getCfg();
+      aiProvider.value = cfg.provider || 'siliconflow';
+      aiBase.value = cfg.baseurl || '';
+      aiModel.value = cfg.model || '';
+      aiKey.value = '';
+      aiStat.textContent = cfg.apikey ? '已配置（' + (ai.PRESETS[cfg.provider] ? ai.PRESETS[cfg.provider].label.split('（')[0] : cfg.provider) + '）' : '未配置';
+    }
+    aiProvider.addEventListener('change', () => {
+      const p = ai.PRESETS[aiProvider.value];
+      if (p && p.baseurl) { aiBase.value = p.baseurl; aiModel.value = p.model; }
+    });
+    root.querySelector('#ai-save').onclick = async () => {
+      const provider = aiProvider.value;
+      const baseurl = aiBase.value.trim();
+      const model = aiModel.value.trim();
+      const key = aiKey.value.trim();
+      if (!baseurl) { ui.toast('请填写接口地址', 'warn'); return; }
+      if (!model) { ui.toast('请填写模型名', 'warn'); return; }
+      const savedKey = await store.getMeta('ai_apikey', '');
+      const finalKey = key || savedKey;
+      if (!finalKey) { ui.toast('请填写 API Key（首次保存必填）', 'warn'); return; }
+      await store.setMeta('ai_provider', provider);
+      await store.setMeta('ai_baseurl', baseurl);
+      await store.setMeta('ai_model', model);
+      await store.setMeta('ai_apikey', finalKey);
+      ui.toast('AI 配置已保存', 'success');
+      aiKey.value = '';
+      await loadAiCfg();
+    };
+    root.querySelector('#ai-test').onclick = async () => {
+      aiStat.textContent = '测试中…';
+      try {
+        const r = await ai.ask('你是测试助手。', '请只回复两个字：成功');
+        aiStat.textContent = '连接成功：' + (r || '').slice(0, 20);
+        ui.toast('AI 连接成功', 'success');
+      } catch (e) {
+        aiStat.textContent = '测试失败：' + e.message;
+        ui.toast('AI 测试失败：' + e.message, 'error');
+      }
+    };
+    await loadAiCfg();
 
     root.querySelector('#save-cfg').onclick = async () => {
       const repo = repoInput.value.trim();
