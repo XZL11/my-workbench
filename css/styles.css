@@ -1454,3 +1454,40 @@ html.spidey-pixel .note-summary-head { color: #bae6fd; }
 html.spidey-pixel .todo-subprog { background: rgba(56,189,248,.18); color: #7dd3fc; }
 html.spidey-pixel .ai-dot { background: #38bdf8; }
 
+/* ===== AI 管家对话 ===== */
+.butler-page { display: block; }
+.chat { display: flex; flex-direction: column; height: calc(100vh - 210px); min-height: 360px; margin-top: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.chat-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px 12px; }
+.chat-empty { text-align: center; padding: 30px 10px; font-size: 13.5px; }
+.msg { max-width: 86%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.6; word-break: break-word; }
+.msg.user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+.msg.ai { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 4px; }
+.msg.ai.err { border-color: var(--danger); color: var(--danger); background: transparent; }
+.msg.typing { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); font-style: italic; }
+.msg.ai p { margin: 5px 0; }
+.msg.ai ul { margin: 5px 0; padding-left: 18px; }
+.chat-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); background: var(--surface); align-items: flex-end; }
+.chat-input textarea { flex: 1; resize: none; }
+.chat-input #send { white-space: nowrap; }
+.chat-banner { background: var(--primary-weak); color: var(--primary); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 12px; font-size: 13px; }
+
+/* ===== 日记 ===== */
+.card.diary { display: flex; align-items: flex-start; gap: 10px; }
+.diary-main { flex: 1; min-width: 0; }
+.diary-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.diary-date { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.diary-mood { font-size: 16px; line-height: 1; }
+.diary-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.diary-prev { font-size: 13px; }
+.diary-view-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.diary-view-meta .diary-mood { font-size: 22px; }
+.diary-view-body { font-size: 14.5px; line-height: 1.7; color: var(--text); }
+
+/* 蜘蛛侠主题：AI 管家 + 日记青色适配 */
+html.spidey-pixel .chat { border-color: #38bdf8; background: rgba(15,23,40,.82); }
+html.spidey-pixel .chat-input { border-top-color: rgba(56,189,248,.4); }
+html.spidey-pixel .msg.ai, html.spidey-pixel .msg.typing { background: rgba(56,189,248,.10); border-color: #38bdf8; color: var(--text); }
+html.spidey-pixel .chat-banner { border: 1px solid #38bdf8; background: rgba(56,189,248,.12); color: #bae6fd; }
+html.spidey-pixel .diary-date { color: #bae6fd; }
+
