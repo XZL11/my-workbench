@@ -1491,3 +1491,18 @@ html.spidey-pixel .msg.ai, html.spidey-pixel .msg.typing { background: rgba(56,1
 html.spidey-pixel .chat-banner { border: 1px solid #38bdf8; background: rgba(56,189,248,.12); color: #bae6fd; }
 html.spidey-pixel .diary-date { color: #bae6fd; }
 
+/* 移动端：AI 管家输入框固定到屏幕底部（PC 端保留原卡片内嵌布局） */
+@media (max-width: 767px) {
+  .butler-page .chat {
+    height: auto; min-height: 0; margin-top: 8px;
+    border: none; border-radius: 0; background: transparent; overflow: visible;
+  }
+  .butler-page .chat-msgs { flex: none; overflow: visible; padding: 4px 0 86px; gap: 12px; }
+  .butler-page .chat-input {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, .06);
+  }
+}
+
