@@ -1491,6 +1491,20 @@ html.spidey-pixel .msg.ai, html.spidey-pixel .msg.typing { background: rgba(56,1
 html.spidey-pixel .chat-banner { border: 1px solid #38bdf8; background: rgba(56,189,248,.12); color: #bae6fd; }
 html.spidey-pixel .diary-date { color: #bae6fd; }
 
+/* ===== AI 晨间简报（首页今日） ===== */
+.ai-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.ai-brief-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+.ai-brief-title .pi { color: var(--primary); display: inline-flex; }
+.ai-brief-body { font-size: 14px; line-height: 1.7; color: var(--text); }
+.ai-brief-body.muted { color: var(--muted); font-size: 13px; }
+
+/* 记账 AI 解析行 */
+.ai-parse-row { display: flex; gap: 8px; margin-top: 8px; }
+.ai-parse-row #ai-parse-in { flex: 1; }
+
+/* 蜘蛛侠主题：晨间简报文图标青色适配 */
+html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
+
 /* 移动端：AI 管家输入框固定到屏幕底部（PC 端保留原卡片内嵌布局） */
 @media (max-width: 767px) {
   .butler-page .chat {
