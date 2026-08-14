@@ -3,6 +3,7 @@
   'use strict';
   const store = WB.store, ui = WB.ui;
   const PRI = { 1: '高', 2: '中', 3: '低' };
+  const BRIEF_SYSTEM = '你是用户的个人晨间简报助手。根据下面用户今日工作台的数据，生成一段简洁的「今日晨间简报」：1）今天最该优先处理的 2-3 件事；2）一句鼓励或提醒；3）如有逾期，提醒尽快处理。用中文、口语化、不超过 150 字。只基于给定数据，不要编造。';
 
   function lastNDays(n) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); out.push(ui.fmtDate(d.getTime())); } return out; }
   function streak(m) { let s = 0; const t = new Date(); for (let i = 0;; i++) { const d = new Date(t); d.setDate(d.getDate() - i); const k = ui.fmtDate(d.getTime()); if (m[k] && m[k].done) s++; else break; } return s; }
@@ -208,6 +209,13 @@
           <div class="stat"><div class="stat-num" id="stat-balance">${(income - expense).toFixed(2)}</div><div class="stat-label">本月结余</div></div>
           <div class="stat"><div class="stat-num" id="stat-habit">${habitDone}/${habits.length}</div><div class="stat-label">习惯打卡</div></div>
         </div>
+        <section class="card section ai-brief">
+          <div class="ai-brief-head">
+            <div class="ai-brief-title"><span class="pi">${ui.icon('sparkles', 18)}</span> AI 晨间简报</div>
+            <button class="btn ghost sm" id="ai-brief-btn">生成简报</button>
+          </div>
+          <div class="ai-brief-body muted" id="ai-brief-body">点击「生成简报」，AI 会根据你今天的待办、习惯、收支生成一份今日行动建议。</div>
+        </section>
         <div class="dash-grid">
           ${panelHTML('check', '今日待办', `<div id="todolist">${todoHTML}</div>`, 'tasks', '<button class="btn primary sm" id="add-task">+ 待办</button>', undefined, true)}
           ${panelHTML('flame', '习惯打卡', `<div id="habits">${habitHTML}</div>`, 'habits', '', 'p-habits')}
@@ -277,6 +285,55 @@
 
     // 笔记/书签跳转
     root.querySelectorAll('[data-go]').forEach(el => { el.onclick = () => { location.hash = '#/' + el.dataset.go; }; });
+
+    // AI 晨间简报：聚合今日数据生成行动建议（按需点击，读取实时数据）
+    root.querySelector('#ai-brief-btn').onclick = genBrief;
+    async function buildBriefContext() {
+      const todayKey = ui.fmtDate(Date.now());
+      const tasks = (await store.getAll('tasks')).filter(i => !i._deleted);
+      const parents = tasks.filter(t => !t.parentId);
+      const dueToday = parents.filter(t => !t.done && t.dueDate === todayKey);
+      const overdue = parents.filter(t => !t.done && t.dueDate && t.dueDate < todayKey);
+      const todo = overdue.concat(dueToday).sort((a, b) => (a.priority - b.priority) || (a.dueDate || '').localeCompare(b.dueDate || ''));
+      const habits = (await store.getAll('habits')).filter(i => !i._deleted);
+      const logs = (await store.getAll('habitlogs')).filter(i => !i._deleted);
+      const logMap = {}; logs.forEach(l => { if (l && l.id) logMap[l.id] = l; });
+      const logFor = hid => { const m = {}; Object.keys(logMap).forEach(k => { if (k.startsWith(hid + ':')) m[k.split(':').slice(1).join(':')] = logMap[k]; }); return m; };
+      const habitUndone = habits.filter(hh => { const m = logFor(hh.id); return !(m[todayKey] && m[todayKey].done); }).map(hh => hh.name);
+      const finance = (await store.getAll('finance')).filter(i => !i._deleted);
+      const mi = finance.filter(i => (i.date || '').slice(0, 7) === todayKey.slice(0, 7));
+      const inc = mi.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
+      const exp = mi.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
+      const notes = (await store.getAll('notes')).filter(i => !i._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3).map(n => n.title);
+      let s = '【今日待办（含逾期）】共 ' + todo.length + ' 项\n';
+      todo.slice(0, 8).forEach(t => { s += '  · ' + t.title + '（' + (PRI[t.priority] || '中') + '，' + (t.dueDate || '无截止') + '）\n'; });
+      s += '【逾期】' + overdue.length + ' 项\n';
+      s += '【习惯未完成】' + (habitUndone.length ? habitUndone.join('、') : '无') + '\n';
+      s += '【本月收支】收入 ' + inc.toFixed(2) + ' 支出 ' + exp.toFixed(2) + ' 结余 ' + (inc - exp).toFixed(2) + '\n';
+      s += '【最近笔记】' + (notes.length ? notes.join('、') : '无') + '\n';
+      return s;
+    }
+    async function genBrief() {
+      if (!(await WB.ai.isConfigured())) {
+        ui.toast('请先到「设置 → AI 助手」配置 API Key', 'warn');
+        setTimeout(() => { location.hash = '#/settings'; }, 400);
+        return;
+      }
+      const btn = root.querySelector('#ai-brief-btn');
+      const body = root.querySelector('#ai-brief-body');
+      btn.disabled = true; btn.textContent = '生成中…';
+      try {
+        const ctx = await buildBriefContext();
+        const text = await WB.ai.ask(BRIEF_SYSTEM, ctx);
+        body.className = 'ai-brief-body';
+        body.innerHTML = ui.mdLite(text);
+        btn.textContent = '重新生成';
+      } catch (e) {
+        body.className = 'ai-brief-body muted';
+        body.innerHTML = '生成失败：' + ui.escapeHtml(e.message);
+        btn.textContent = '生成简报';
+      } finally { btn.disabled = false; }
+    }
 
     async function openSubForm(parentId) {
       const p = parentId ? await store.get('tasks', parentId) : null;
