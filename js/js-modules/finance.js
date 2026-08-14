@@ -3,6 +3,7 @@
   'use strict';
   const store = WB.store, ui = WB.ui;
   const CATS = ['餐饮', '交通', '购物', '居住', '娱乐', '医疗', '教育', '工资', '理财', '其他'];
+  const FIN_PARSE_SYSTEM = '你是记账解析助手。用户会给你一段消费/收入描述（中文）。请从中提取结构化信息，只输出一个 JSON 对象（不要任何解释、不要代码块），字段：amount(数字，必填，没有则 0)、type("expense"或"income")、category(从以下选一：餐饮/交通/购物/居住/娱乐/医疗/教育/工资/理财/其他)、note(商户或备注，简短)。示例输入「星巴克 38」→{"amount":38,"type":"expense","category":"餐饮","note":"星巴克"}。';
 
   function formFields(f) {
     f = f || {};
@@ -166,7 +167,10 @@
 
     function openForm(f) {
       const m = ui.openModal({
-        title: f ? '编辑记录' : '记一笔', html: ui.form(formFields(f)),
+        title: f ? '编辑记录' : '记一笔', html: ui.form(formFields(f)) +
+          '<div class="ai-bar"><button type="button" class="btn ghost sm" id="ai-parse">✨ AI 智能入账</button></div>' +
+          '<div id="ai-parse-row" style="display:none"><input id="ai-parse-in" class="input" placeholder="粘贴消费描述，如：星巴克 38 / 午餐 35 美团"><button class="btn ghost sm" id="ai-parse-go">解析</button></div>' +
+          '<div class="hint muted">输入「描述 + 金额」，AI 自动识别金额 / 类型 / 分类 / 商户，确认后保存即可。</div>',
         actions: [{ label: '取消' }, { label: '保存', primary: true, onClick: async (close) => {
           const amount = parseFloat(m.dialog.querySelector('#f-amount').value);
           if (isNaN(amount) || amount <= 0) { ui.toast('请输入有效金额', 'warn'); return; }
@@ -180,6 +184,33 @@
         } }]
       });
       ui.bindFormValidation(m.dialog);
+      const aiParseBtn = m.dialog.querySelector('#ai-parse');
+      const aiParseRow = m.dialog.querySelector('#ai-parse-row');
+      const aiParseIn = m.dialog.querySelector('#ai-parse-in');
+      aiParseBtn.onclick = () => {
+        aiParseRow.style.display = (aiParseRow.style.display === 'none') ? 'flex' : 'none';
+        if (aiParseRow.style.display === 'flex') aiParseIn.focus();
+      };
+      m.dialog.querySelector('#ai-parse-go').onclick = async () => {
+        const raw = aiParseIn.value.trim();
+        if (!raw) { ui.toast('请先输入消费描述', 'warn'); return; }
+        if (!(await WB.ai.isConfigured())) { ui.toast('请先到「设置 → AI 助手」配置 API Key', 'warn'); setTimeout(() => { location.hash = '#/settings'; }, 400); return; }
+        const goBtn = m.dialog.querySelector('#ai-parse-go');
+        goBtn.disabled = true; goBtn.textContent = '解析中…';
+        try {
+          const parsed = WB.ai.parseJSON(await WB.ai.ask(FIN_PARSE_SYSTEM, raw));
+          if (!parsed || !(parsed.amount > 0)) { ui.toast('没能解析出金额，请检查描述', 'warn'); }
+          else {
+            m.dialog.querySelector('#f-amount').value = parsed.amount;
+            if (parsed.type === 'income' || parsed.type === 'expense') m.dialog.querySelector('#f-type').value = parsed.type;
+            if (parsed.category && CATS.indexOf(parsed.category) >= 0) m.dialog.querySelector('#f-cat').value = parsed.category;
+            if (parsed.note) m.dialog.querySelector('#f-note').value = parsed.note;
+            ui.toast('已填入，请确认后保存');
+            aiParseRow.style.display = 'none';
+          }
+        } catch (e) { ui.toast('AI 解析失败：' + e.message, 'error'); }
+        finally { goBtn.disabled = false; goBtn.textContent = '解析'; }
+      };
       setTimeout(() => m.dialog.querySelector('#f-amount').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
