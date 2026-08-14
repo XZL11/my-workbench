@@ -42,7 +42,11 @@
         body: JSON.stringify({ model: cfg.model, messages: messages, temperature: 0.7, stream: false })
       });
     } catch (e) {
-      throw new Error('网络请求失败（可能是跨域 CORS 限制或离线）：' + (e && e.message ? e.message : e));
+      const em = (e && e.message) ? e.message : '';
+      if (/Failed to fetch|NetworkError|network/i.test(em)) {
+        throw new Error('网络请求失败：浏览器连不上该接口。常见原因——①在应用内预览面板测试（沙箱常屏蔽外网），请用浏览器打开线上站点 xzl11.github.io/my-workbench 并硬刷新后再测；②你的网络/防火墙/浏览器插件屏蔽了 api.siliconflow.cn（可在新标签页直接打开该域名验证）；③当前离线。若网络确实屏蔽，可在「接口地址」填一个你自己的代理（如 Cloudflare Worker）来中转。');
+      }
+      throw new Error('网络请求失败（' + em + '）');
     }
     if (!res.ok) {
       let msg = 'HTTP ' + res.status;
