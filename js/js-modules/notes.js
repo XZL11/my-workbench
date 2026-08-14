@@ -3,6 +3,23 @@
   'use strict';
   const store = WB.store, ui = WB.ui;
   const TYPES = { note: '笔记', knowledge: '知识库', timeline: '时间轴', idea: '灵感' };
+  const SUMMARY_SYSTEM = '你是一个简洁的中文摘要助手。把用户给出的笔记内容压缩成 3-5 条要点摘要，使用中文，保留关键信息，不要发挥。';
+
+  // 调用 AI 生成摘要并持久化到笔记记录的 summary 字段（自动生成 + 落库，查看时直接展示）
+  async function generateAndSaveSummary(id, body) {
+    let text;
+    try {
+      text = await WB.ai.ask(SUMMARY_SYSTEM, '请摘要以下内容：\n\n' + body);
+    } catch (e) {
+      ui.toast('AI 摘要生成失败：' + (e && e.message ? e.message : e), 'warn');
+      return;
+    }
+    const rec = await store.get('notes', id);
+    if (!rec || rec._deleted) return; // 可能已被删除
+    rec.summary = text;
+    await store.put('notes', rec);
+    return text;
+  }
 
   function escapeReg(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   function highlight(text, q) {
@@ -59,11 +76,13 @@
       list.innerHTML = view.map(n => {
         const tags = (n.tags || []).map(x => `<span class="tag">${ui.escapeHtml(x)}</span>`).join('');
         const prev = snippet(n.body, raw);
+        const summ = n.summary ? `<div class="note-sum muted">✨ ${highlight(ui.escapeHtml(n.summary), raw)}</div>` : '';
         return `
           <div class="card note" data-id="${n.id}">
             <div class="note-main">
               <div class="note-title">${highlight(n.title || '无标题', raw)}</div>
               <div class="note-meta"><span class="badge">${TYPES[n.type] || '笔记'}</span>${tags}<span class="muted">${ui.fmtRelative(n.updatedAt)}</span></div>
+              ${summ}
               <div class="note-prev muted">${highlight(prev, raw)}</div>
             </div>
             <div class="row-actions">
@@ -86,7 +105,7 @@
     function openForm(n) {
       const m = ui.openModal({
         title: n ? '编辑' : '新建笔记',
-        html: ui.form(formFields(n)) + '<div class="ai-bar"><button type="button" class="btn ghost sm" id="ai-sum">✨ AI 摘要</button><button type="button" class="btn ghost sm" id="ai-script">✨ 改写口播稿</button></div><div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml((n && n.body) || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
+        html: ui.form(formFields(n)) + '<div class="ai-bar"><button type="button" class="btn ghost sm" id="ai-script">✨ 改写口播稿</button></div><div class="hint muted">保存后若已配置 AI，会自动生成摘要并保存，稍后查看即可看到。</div><div class="editor"><textarea id="f-body" class="input" rows="10" placeholder="支持 Markdown：**粗体**、*斜体*、# 标题、- 列表、[链接](url)">' + ui.escapeHtml((n && n.body) || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -98,6 +117,10 @@
             obj.tags = m.dialog.querySelector('#f-tags').value.split(',').map(s => s.trim()).filter(Boolean);
             obj.body = m.dialog.querySelector('#f-body').value;
             await store.put('notes', obj); close(); await refresh();
+            // 自动生成并持久化摘要：仅当正文非空、已配置 AI、且尚无摘要时
+            if (obj.body.trim() && WB.ai.isConfigured() && !obj.summary) {
+              generateAndSaveSummary(obj.id, obj.body).then(() => refresh());
+            }
           } }
         ]
       });
@@ -106,17 +129,6 @@
       const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
       ta.addEventListener('input', upd); upd();
       ui.bindFormValidation(m.dialog);
-      m.dialog.querySelector('#ai-sum').onclick = () => {
-        const src = ta.value.trim();
-        if (!src) { ui.toast('请先写点内容再摘要', 'warn'); return; }
-        WB.ai.assistModal({
-          title: 'AI 摘要',
-          system: '你是一个简洁的中文摘要助手。把用户给出的笔记内容压缩成 3-5 条要点摘要，使用中文，保留关键信息，不要发挥。',
-          user: '请摘要以下内容：\n\n' + src,
-          adoptLabel: '替换正文',
-          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已替换为摘要'); }
-        });
-      };
       m.dialog.querySelector('#ai-script').onclick = () => {
         const src = ta.value.trim();
         if (!src) { ui.toast('请先写点内容', 'warn'); return; }
@@ -133,7 +145,7 @@
     function openView(n) {
       if (!n) return;
       const tags = (n.tags || []).map(x => `<span class="tag">${ui.escapeHtml(x)}</span>`).join(' ');
-      ui.openModal({
+      const m = ui.openModal({
         title: ui.escapeHtml(n.title || '无标题'),
         html: `
           <div class="note-view">
@@ -142,17 +154,27 @@
               ${tags ? '<span class="note-tags">' + tags + '</span>' : ''}
               <span class="muted">${ui.fmtRelative(n.updatedAt)}</span>
             </div>
+            <div class="note-summary" id="summary-box"${n.summary ? '' : ' style="display:none"'}>
+              <div class="note-summary-head"><span class="spark">✨</span> AI 摘要</div>
+              <div class="note-summary-body md">${n.summary ? ui.mdLite(n.summary) : ''}</div>
+            </div>
             <div class="note-view-body md">${ui.mdLite(n.body || '')}</div>
           </div>`,
         actions: [
           { label: '关闭' },
-          { label: '✨ AI 摘要', onClick: () => {
+          { label: n.summary ? '重新生成摘要' : '✨ 生成摘要', onClick: () => {
             const src = (n && n.body) || '';
             if (!src.trim()) { ui.toast('笔记内容为空', 'warn'); return false; }
-            WB.ai.assistModal({
-              title: 'AI 摘要：' + (n.title || ''),
-              system: '你是一个简洁的中文摘要助手。把用户给出的笔记内容压缩成 3-5 条要点摘要，使用中文，保留关键信息，不要发挥。',
-              user: '请摘要以下内容：\n\n' + src
+            ui.toast('正在生成 AI 摘要…');
+            generateAndSaveSummary(n.id, src).then(text => {
+              if (!text) return;
+              n.summary = text;
+              const box = m.dialog.querySelector('#summary-box');
+              if (box) {
+                box.style.display = '';
+                box.querySelector('.note-summary-body').innerHTML = ui.mdLite(text);
+              }
+              refresh();
             });
             return false; // 保持查看弹窗打开
           } },
