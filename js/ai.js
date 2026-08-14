@@ -25,21 +25,23 @@
     return !!(c.apikey && c.baseurl);
   }
 
-  // 统一调用：system/user 两段式提示；失败抛出友好错误
-  async function ask(system, user) {
+  // 统一调用（多轮）：messages 由 system + turns([{role,content}]) 组成；失败抛出友好错误
+  async function chat(system, turns, opts) {
     const cfg = await getCfg();
     if (!cfg.apikey) throw new Error('未配置 AI：请到「设置 → AI 助手」填写 API Key');
     if (!cfg.baseurl) throw new Error('未配置 AI 接口地址');
     const url = cfg.baseurl.replace(/\/+$/, '') + '/chat/completions';
     const messages = [];
     if (system) messages.push({ role: 'system', content: system });
-    messages.push({ role: 'user', content: user });
+    (turns || []).forEach(t => {
+      if (t && t.content) messages.push({ role: (t.role === 'assistant') ? 'assistant' : 'user', content: t.content });
+    });
     let res;
     try {
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apikey },
-        body: JSON.stringify({ model: cfg.model, messages: messages, temperature: 0.7, stream: false })
+        body: JSON.stringify({ model: cfg.model, messages: messages, temperature: (opts && opts.temperature != null ? opts.temperature : 0.7), stream: false })
       });
     } catch (e) {
       const em = (e && e.message) ? e.message : '';
@@ -59,6 +61,11 @@
     const text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     if (!text) throw new Error('接口未返回有效内容');
     return text.trim();
+  }
+
+  // 两段式（单轮）便捷封装：委托给 chat
+  async function ask(system, user) {
+    return await chat(system, [{ role: 'user', content: user }]);
   }
 
   // 把 AI 返回的文本拆成「一行一条」的建议/子任务
@@ -111,5 +118,5 @@
     return m;
   }
 
-  WB.ai = { PRESETS, getCfg, isConfigured, ask, assistModal, parseLines };
+  WB.ai = { PRESETS, getCfg, isConfigured, ask, chat, assistModal, parseLines };
 })(window.WB = window.WB || {});
