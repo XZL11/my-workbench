@@ -75,6 +75,16 @@
       .filter(Boolean);
   }
 
+  // 从 AI 文本中解析 JSON（容错：去掉 ```json 围栏、截取首个 {...} 块）
+  function parseJSON(text) {
+    if (!text) return null;
+    let s = String(text).trim();
+    s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const start = s.indexOf('{'), end = s.lastIndexOf('}');
+    if (start >= 0 && end > start) s = s.slice(start, end + 1);
+    try { return JSON.parse(s); } catch (e) { return null; }
+  }
+
   // 通用 AI 助手弹窗：自动生成 → 可编辑结果 → 复制 / 采纳
   // opts: { title, system, user, adoptLabel, onAdopt(text), copyLabel }
   async function assistModal(opts) {
@@ -118,5 +128,5 @@
     return m;
   }
 
-  WB.ai = { PRESETS, getCfg, isConfigured, ask, chat, assistModal, parseLines };
+  WB.ai = { PRESETS, getCfg, isConfigured, ask, chat, assistModal, parseLines, parseJSON };
 })(window.WB = window.WB || {});
