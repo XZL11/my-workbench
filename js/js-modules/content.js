@@ -5,6 +5,11 @@
   const KIND = { shortvideo: '短视频脚本', article: '公众号文章' };
   const STATUS = { idea: '灵感', draft: '草稿', review: '待审', published: '已发布' };
 
+  const DRAFT_SYSTEM = '你是一个自媒体内容创作助手。根据用户给出的标题、类型、平台和备注，生成一篇可直接使用的初稿。短视频脚本要口语化、有钩子和节奏；公众号文章要有清晰结构和干货。中文，直接给正文，不要解释、不要加标题。';
+  const MULTI_SYSTEM = '你是一个多平台内容改写助手。把用户给出的内容改写成多种平台版本：①公众号长文（结构化、有干货）②抖音口播稿（口语化、有钩子/情绪/转化闭环）③小红书笔记（吸睛标题、分段、带 #标签）④微博短文（犀利、有话题）。用【公众号】、【抖音】、【小红书】、【微博】分节，每节直接给内容，不要解释。';
+  const DIAGNOSE_SYSTEM = '你是一个爆款内容诊断师。针对用户给出的内容，从标题吸引力、开头钩子、价值密度、情绪共鸣、互动引导、平台适配几个维度给简短诊断：先说 1-2 个亮点，再给 3 条可落地的优化建议。中文，直接给，不要客套。';
+  const HUMANIZE_SYSTEM = '你是一个文本润色助手。把用户给出的内容改写得更像人写的：去掉 AI 套话、过度排比和空泛结论，口语自然、有细节和观点，保持原意、长度大致相当。中文，直接给改写后的全文。';
+
   function formHTML(c) {
     c = c || {};
     return `
@@ -26,7 +31,14 @@
           <textarea id="f-body" class="input" rows="10" placeholder="正文 / 脚本内容，支持 Markdown">${ui.escapeHtml(c.body || '')}</textarea>
           <div id="f-preview" class="preview md"></div>
         </div>
-      </div>`;
+      </div>
+      <div class="ai-bar">
+        <button type="button" class="btn ghost sm" id="ai-draft">✨ AI 生成草稿</button>
+        <button type="button" class="btn ghost sm" id="ai-multi">✨ 多平台改写</button>
+        <button type="button" class="btn ghost sm" id="ai-diagnose">✨ 爆款诊断</button>
+        <button type="button" class="btn ghost sm" id="ai-humanize">✨ 去 AI 味</button>
+      </div>
+      <div class="hint muted">AI 基于你填的标题 / 类型 / 平台 / 正文生成；爆款诊断为启发式建议（非实时抓取数据）。需先在「设置 → AI 助手」配置密钥。</div>`;
   }
 
   async function render(root) {
@@ -100,6 +112,38 @@
       const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
       ta.addEventListener('input', upd); upd();
       ui.bindFormValidation(m.dialog);
+      m.dialog.querySelector('#ai-draft').onclick = () => {
+        const title = m.dialog.querySelector('#f-title').value.trim();
+        if (!title) { ui.toast('请先填标题', 'warn'); return; }
+        const kind = m.dialog.querySelector('#f-kind').value;
+        const platform = m.dialog.querySelector('#f-platform').value.trim();
+        const note = m.dialog.querySelector('#f-note').value.trim();
+        const user = '标题：' + title + '\n类型：' + (KIND[kind] || '') + (platform ? '\n平台：' + platform : '') + (note ? '\n备注：' + note : '');
+        WB.ai.assistModal({
+          title: 'AI 生成草稿', system: DRAFT_SYSTEM, user,
+          adoptLabel: '采用为草稿',
+          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已生成草稿'); }
+        });
+      };
+      m.dialog.querySelector('#ai-multi').onclick = () => {
+        const src = ta.value.trim();
+        if (!src) { ui.toast('请先写正文或生成草稿', 'warn'); return; }
+        WB.ai.assistModal({ title: '多平台改写', system: MULTI_SYSTEM, user: '请改写以下内容：\n\n' + src });
+      };
+      m.dialog.querySelector('#ai-diagnose').onclick = () => {
+        const src = ta.value.trim();
+        if (!src) { ui.toast('请先写正文或生成草稿', 'warn'); return; }
+        WB.ai.assistModal({ title: '爆款诊断', system: DIAGNOSE_SYSTEM, user: '请诊断以下内容：\n\n' + src });
+      };
+      m.dialog.querySelector('#ai-humanize').onclick = () => {
+        const src = ta.value.trim();
+        if (!src) { ui.toast('请先写正文或生成草稿', 'warn'); return; }
+        WB.ai.assistModal({
+          title: '去 AI 味', system: HUMANIZE_SYSTEM, user: '请润色以下内容：\n\n' + src,
+          adoptLabel: '替换为润色版',
+          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已去 AI 味'); }
+        });
+      };
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
     root.querySelector('#add').onclick = () => openForm(null);
