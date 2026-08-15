@@ -253,7 +253,31 @@ button { font-family: inherit; cursor: pointer; }
 .badge.st-done { background: #e6f6ee; color: var(--success); }
 .badge.st-doing { background: #fff4e0; color: var(--warn); }
 .badge.st-idea { background: var(--surface-2); color: var(--muted); }
-.badge.st-idea { background: var(--primary-weak); color: var(--primary); }
+.badge.st-draft { background: var(--primary-weak); color: var(--primary); }
+.badge.st-review { background: #fff4e0; color: var(--warn); }
+.badge.st-published { background: #e6f6ee; color: var(--success); }
+/* 创作模块：高效简约风格（区别于笔记的通用居中卡片） */
+.card.content { align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+.content-bar { width: 3px; flex: 0 0 3px; align-self: stretch; }
+.card.content.st-idea .content-bar { background: var(--muted); }
+.card.content.st-draft .content-bar { background: var(--primary); }
+.card.content.st-review .content-bar { background: var(--warn); }
+.card.content.st-published .content-bar { background: var(--success); }
+.card.content .content-main { padding: 9px 12px; }
+.card.content .content-title { font-size: 14.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.content .content-meta { margin-top: 3px; }
+.card.content .row-actions { padding: 0 8px; align-self: center; }
+/* 管道概览（一眼看全内容生产进度） */
+.content-ov { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 2px 2px; font-size: 12.5px; color: var(--muted); }
+.content-ov b { color: var(--text); font-weight: 600; }
+.content-ov .ov-idea b { color: var(--muted); }
+.content-ov .ov-draft b { color: var(--primary); }
+.content-ov .ov-review b { color: var(--warn); }
+.content-ov .ov-published b { color: var(--success); }
+html.spidey-pixel .card.content.st-idea .content-bar { background: #64748b; }
+html.spidey-pixel .card.content.st-draft .content-bar { background: #38bdf8; }
+html.spidey-pixel .card.content.st-review .content-bar { background: #fbbf24; }
+html.spidey-pixel .card.content.st-published .content-bar { background: #34d399; }
 
 /* 日程 */
 .cal-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
