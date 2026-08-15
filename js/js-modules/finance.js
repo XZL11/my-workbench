@@ -4,6 +4,7 @@
   const store = WB.store, ui = WB.ui;
   const CATS = ['餐饮', '交通', '购物', '居住', '娱乐', '医疗', '教育', '工资', '理财', '其他'];
   const FIN_PARSE_SYSTEM = '你是记账解析助手。用户会给你一段消费/收入描述（中文）。请从中提取结构化信息，只输出一个 JSON 对象（不要任何解释、不要代码块），字段：amount(数字，必填，没有则 0)、type("expense"或"income")、category(从以下选一：餐饮/交通/购物/居住/娱乐/医疗/教育/工资/理财/其他)、note(商户或备注，简短)。示例输入「星巴克 38」→{"amount":38,"type":"expense","category":"餐饮","note":"星巴克"}。';
+  const FIN_INSIGHT_SYSTEM = '你是用户的个人财务洞察助手。根据用户给出的本月收支数据（收入、支出、结余、储蓄率、固定成本、支出分类占比、单笔大额、与上月对比），用中文口语化地生成一段「月度洞察」：1）一句话概括本月消费特征；2）指出 1-2 个异常或偏高的项；3）给 2-3 条具体、可执行的省钱/理财建议。不超过 220 字，只基于给定数据，不要编造。';
 
   function formFields(f) {
     f = f || {};
@@ -94,6 +95,13 @@
           <div class="stat"><div class="stat-num ${summary.income - summary.expense < 0 ? 'neg' : ''}" id="stat-balance">${(summary.income - summary.expense).toFixed(2)}</div><div class="stat-label">结余</div></div>
           <div class="stat"><div class="stat-num" id="stat-fixed">${summary.fixedSum.toFixed(2)}</div><div class="stat-label">固定月成本</div></div>
         </div>
+        <section class="card section ai-brief">
+          <div class="ai-brief-head">
+            <div class="ai-brief-title"><span class="pi">${ui.icon('sparkles', 18)}</span> AI 月度洞察</div>
+            <button class="btn ghost sm" id="fin-insight-btn">生成洞察</button>
+          </div>
+          <div class="ai-brief-body muted" id="fin-insight-body">点击「生成洞察」，AI 会根据本月收支、分类占比和上月对比，给出消费特征与省钱建议。</div>
+        </section>
         <section class="card section">
           <h2>本月收入 / 支出分类</h2>
           <div class="cat-split">
@@ -164,6 +172,51 @@
       root.querySelectorAll('#filters .chip').forEach(c => c.classList.remove('active'));
       e.target.classList.add('active'); paint(e.target.dataset.f);
     });
+
+    // AI 月度洞察：聚合本月收支 / 分类占比 / 单笔大额 / 上月对比，生成消费特征与省钱建议
+    root.querySelector('#fin-insight-btn').onclick = genFinInsight;
+    function buildFinanceInsightContext() {
+      const month = ui.fmtDate(Date.now()).slice(0, 7);
+      const d2 = new Date(); d2.setMonth(d2.getMonth() - 1);
+      const lastMonth = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0');
+      const monthItems = all.filter(i => (i.date || '').slice(0, 7) === month);
+      const lastItems = all.filter(i => (i.date || '').slice(0, 7) === lastMonth);
+      const income = monthItems.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
+      const expense = monthItems.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
+      const lastIncome = lastItems.filter(i => i.type === 'income').reduce((s, i) => s + (+i.amount || 0), 0);
+      const lastExpense = lastItems.filter(i => i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
+      const fixedSum = all.filter(i => i.fixed && i.type === 'expense').reduce((s, i) => s + (+i.amount || 0), 0);
+      const catMap = {};
+      monthItems.filter(i => i.type === 'expense').forEach(i => { const c = i.category || '其他'; catMap[c] = (catMap[c] || 0) + (+i.amount || 0); });
+      const catRows = Object.keys(catMap).map(c => ({ label: c, value: catMap[c] })).sort((a, b) => b.value - a.value);
+      const top = catRows.slice(0, 5).map(r => r.label + ' ' + r.value.toFixed(2) + '元').join('、');
+      const big = monthItems.filter(i => i.type === 'expense').sort((a, b) => (+b.amount || 0) - (+a.amount || 0)).slice(0, 3).map(i => (i.note || i.category) + ' ' + (+i.amount).toFixed(2)).join('、');
+      const saveRate = income > 0 ? ((income - expense) / income * 100).toFixed(1) : 'N/A';
+      let s = '【本月 ' + month + ' 收支】\n';
+      s += '收入 ' + income.toFixed(2) + ' 元，支出 ' + expense.toFixed(2) + ' 元，结余 ' + (income - expense).toFixed(2) + ' 元，储蓄率 ' + saveRate + '%\n';
+      s += '固定月成本 ' + fixedSum.toFixed(2) + ' 元\n';
+      s += '支出分类 Top5：' + (top || '无') + '\n';
+      s += '单笔最大支出 Top3：' + (big || '无') + '\n';
+      s += '【上月 ' + lastMonth + ' 对比】收入 ' + lastIncome.toFixed(2) + '，支出 ' + lastExpense.toFixed(2) + '\n';
+      return s;
+    }
+    async function genFinInsight() {
+      if (!(await WB.ai.isConfigured())) { ui.toast('请先到「设置 → AI 助手」配置 API Key', 'warn'); setTimeout(() => { location.hash = '#/settings'; }, 400); return; }
+      const btn = root.querySelector('#fin-insight-btn');
+      const body = root.querySelector('#fin-insight-body');
+      btn.disabled = true; btn.textContent = '生成中…';
+      try {
+        const ctx = buildFinanceInsightContext();
+        const text = await WB.ai.ask(FIN_INSIGHT_SYSTEM, ctx);
+        body.className = 'ai-brief-body';
+        body.innerHTML = ui.mdLite(text);
+        btn.textContent = '重新生成';
+      } catch (e) {
+        body.className = 'ai-brief-body muted';
+        body.innerHTML = '生成失败：' + ui.escapeHtml(e.message);
+        btn.textContent = '生成洞察';
+      } finally { btn.disabled = false; }
+    }
 
     function openForm(f) {
       const m = ui.openModal({
