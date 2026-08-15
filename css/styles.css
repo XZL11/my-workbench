@@ -947,6 +947,7 @@ body {
 /* 窄屏：网格收窄为单列堆叠 */
 @media (max-width: 560px) {
   .dash-grid { grid-template-columns: 1fr; gap: 12px; }
+  .ai-brief { margin-bottom: 12px; }
 }
 
 /* 减少动态效果：关闭面板入场位移 */
@@ -1514,6 +1515,7 @@ html.spidey-pixel .chat-banner { border: 1px solid #38bdf8; background: rgba(56,
 html.spidey-pixel .diary-date { color: #bae6fd; }
 
 /* ===== AI 晨间简报（首页今日） ===== */
+.ai-brief { margin-bottom: 16px; }
 .ai-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .ai-brief-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
 .ai-brief-title .pi { color: var(--primary); display: inline-flex; }
