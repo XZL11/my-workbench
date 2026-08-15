@@ -300,6 +300,16 @@ button { font-family: inherit; cursor: pointer; }
 .modal-head { padding: 16px 18px; font-weight: 700; font-size: 17px; border-bottom: 1px solid var(--border); }
 .modal-body { padding: 16px 18px; }
 .modal-foot { padding: 12px 18px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); }
+/* 新建笔记铺满屏幕：正文输入框尽量大（:has 兜底 + position 兜底，兼容旧浏览器） */
+.modal-overlay:has(.modal-full) { padding: 0; }
+.modal-full { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; border-radius: 0; margin: 0; display: flex; flex-direction: column; }
+.modal-full .modal-head { flex: 0 0 auto; }
+.modal-full .modal-body { flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; padding: 14px 18px; gap: 10px; }
+.modal-full .form { flex: 0 0 auto; }
+.modal-full .note-editor { flex: 1 1 auto; min-height: 0; }
+.modal-full #f-body { flex: 1 1 auto; min-height: 240px; resize: none; }
+.modal-full .script-out { flex: 0 0 auto; max-height: 38vh; }
+.modal-full .modal-foot { flex: 0 0 auto; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 
 /* ===== 提示 ===== */
 #toast-box { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -1018,9 +1028,17 @@ body {
 .note-view-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .note-view-meta .muted { margin-left: auto; }
 .note-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; }
-.note-view-body { font-size: 15px; line-height: 1.75; color: var(--text); overflow-wrap: anywhere; }
-.note-view-body.md > :first-child { margin-top: 0; }
-.note-view-body.md > :last-child { margin-bottom: 0; }
+.note-view-body { font-size: 15px; line-height: 1.75; color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; }
+.note-editor { display: flex; flex-direction: column; gap: 10px; }
+.note-editor #f-body { width: 100%; resize: vertical; font-family: inherit; }
+/* AI 口播稿展示框（位于原文下方，不改写原文） */
+.script-out { border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); }
+.script-out-head { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 600; color: var(--primary); margin-bottom: 6px; }
+.script-out-body { font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
+/* 查看弹窗里的口播稿 */
+.note-script { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px; }
+.note-script-head { font-size: 13px; font-weight: 600; color: var(--primary); margin-bottom: 6px; }
+.note-script-body { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 
 /* 内容创作面板 chips 容器（解决标签乱换行） */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1451,6 +1469,10 @@ html.spidey-pixel .note-sum { color: #7dd3fc; }
 html.spidey-pixel .note-sum mark { background: rgba(56,189,248,.16); color: #bae6fd; }
 html.spidey-pixel .note-summary { border-color: #38bdf8; background: rgba(56,189,248,.12); }
 html.spidey-pixel .note-summary-head { color: #bae6fd; }
+html.spidey-pixel .script-out { border-color: rgba(56,189,248,.5); background: rgba(56,189,248,.10); }
+html.spidey-pixel .script-out-head { color: #bae6fd; }
+html.spidey-pixel .note-script { border-top-color: rgba(56,189,248,.5); }
+html.spidey-pixel .note-script-head { color: #bae6fd; }
 html.spidey-pixel .todo-subprog { background: rgba(56,189,248,.18); color: #7dd3fc; }
 html.spidey-pixel .ai-dot { background: #38bdf8; }
 
