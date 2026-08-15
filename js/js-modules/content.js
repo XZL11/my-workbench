@@ -56,6 +56,7 @@
             ${Object.keys(STATUS).map(s => `<option value="${s}">${STATUS[s]}</option>`).join('')}
           </select>
         </div>
+        <div class="content-ov" id="content-ov"></div>
         <div id="list" class="list"></div>
       </div>`;
     const list = root.querySelector('#list');
@@ -65,9 +66,17 @@
       if (kf !== 'all') view = view.filter(i => i.kind === kf);
       if (sf !== 'all') view = view.filter(i => i.status === sf);
       view = view.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const cnt = { idea: 0, draft: 0, review: 0, published: 0 };
+      all.forEach(i => { if (cnt[i.status] != null) cnt[i.status]++; });
+      root.querySelector('#content-ov').innerHTML = `
+        <span class="ov-idea">灵感 <b>${cnt.idea}</b></span>
+        <span class="ov-draft">草稿 <b>${cnt.draft}</b></span>
+        <span class="ov-review">待审 <b>${cnt.review}</b></span>
+        <span class="ov-published">已发布 <b>${cnt.published}</b></span>`;
       if (!view.length) { list.innerHTML = ui.emptyState('还没有内容，点新建开始创作', { action: { label: '新建内容' } }); bindEmpty(); return; }
       list.innerHTML = view.map(c => `
-        <div class="card content" data-id="${c.id}">
+        <div class="card content st-${c.status}" data-id="${c.id}">
+          <div class="content-bar"></div>
           <div class="content-main">
             <div class="content-title">${ui.escapeHtml(c.title || '无标题')}</div>
             <div class="content-meta">
