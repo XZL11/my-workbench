@@ -30,7 +30,8 @@
     coins: '<ellipse cx="9" cy="7" rx="5" ry="5"/><path d="M4 7v3c0 2.2 2.2 4 5 4s5-1.8 5-4V7"/><ellipse cx="15" cy="14" rx="5" ry="5"/><path d="M10 14v3c0 2.2 2.2 4 5 4s5-1.8 5-4v-3"/>',
     sparkles: '<path d="M12 3l1.7 4.6L18 9l-4.3 1.4L12 15l-1.7-4.6L6 9l4.3-1.4z"/><path d="M19 13l.9 2.4L22 16l-2.1.6L19 19l-.9-2.4L16 16l2.1-.6z"/><path d="M5 14l.7 1.9L7.6 16.6 5.7 17.3 5 19l-.7-1.7L2.4 16.6l1.9-.7z"/>',
     butler: '<path d="M21 11.5a8 8 0 0 1-8 8H8l-4 3V19a8 8 0 1 1 17-7.5z"/><circle cx="9" cy="12.5" r="1"/><circle cx="12" cy="12.5" r="1"/><circle cx="15" cy="12.5" r="1"/>',
-    diary: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><line x1="9" y1="3.5" x2="9" y2="20.5"/><line x1="13" y1="8" x2="17" y2="8"/><line x1="13" y1="12" x2="17" y2="12"/>'
+    diary: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><line x1="9" y1="3.5" x2="9" y2="20.5"/><line x1="13" y1="8" x2="17" y2="8"/><line x1="13" y1="12" x2="17" y2="12"/>',
+    trendingUp: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>'
   };
   // 模块图标名 → 吉祥物图片文件名（解决图标名与文件名不一致导致的空白/错配）
   const MASCOT_MAP = {
