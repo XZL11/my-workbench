@@ -157,17 +157,19 @@
 
   function calc(rec, curPrice) {
     const Q = num(rec.quantity, 0);
-    const buy = num(rec.buyPrice) * Q;
-    const cBuy = buyFees(rec, buy);
+    const buy = num(rec.buyPrice) * Q;            // 买入总价（用户填入的买入价已含买入佣金/过户费，不再重复计）
+    const cBuy = 0;                              // 买入价已含买入费用
     const D = daysBetween(rec.startDate);
     const st = loanState(rec, D);
     const prepayFee = st.remaining * rates(rec).prepay;
+    const own = Math.max(0, buy - st.P);         // 自有本金 = 总投入 − 贷款本金（其余来自借款）
 
     // 覆盖总利息：优先用平台报价的「期限总利息」，没填才退回公式推算的整期利息
     const totalForCover = (st.termInterest != null && st.termInterest > 0) ? st.termInterest : st.total;
-    const costNow = buy + cBuy + st.accrued + prepayFee;   // 立刻还清：含截至今日利息 + 提前还款违约金
-    const costAccrued = buy + cBuy + st.accrued;           // 覆盖累计日利息：截至今日已产生的利息（不含提前还款违约金）
-    const costTotal = buy + cBuy + totalForCover;          // 持有到期：吃满整期全部利息
+    // 成本基准 = 买入总价（贷款+自有）+ 贷款利息；三者（累计息/保本/覆息）都会同时保住贷款与自有本金
+    const costNow = buy + st.accrued + prepayFee;       // 立刻还清：含截至今日利息 + 提前还款违约金
+    const costAccrued = buy + st.accrued;              // 覆盖累计日利息：截至今日已产生的利息（不含提前还款违约金）
+    const costTotal = buy + totalForCover;             // 持有到期：吃满整期全部利息
     const breakeven = solvePrice(rec, costNow);
     const coverAccrued = solvePrice(rec, costAccrued);
     const coverAll = solvePrice(rec, costTotal);
@@ -175,10 +177,10 @@
     const market = curPrice ? curPrice * Q : 0;
     const netIfSell = curPrice ? market - sellFees(rec, market) : 0;
     const pnl = curPrice ? netIfSell - costNow : 0;
-    // 每多持有一天，保本价上浮多少
+    // 每多持有一天，保本价上浮多少（仅由贷款日息驱动）
     const drift = st.daily / Math.max(1, Q) / (1 - (rates(rec).comm + rates(rec).stamp + rates(rec).transfer));
 
-    return { Q, buy, cBuy, D, st, prepayFee, totalForCover, costNow, costAccrued, costTotal, breakeven, coverAccrued, coverAll, market, netIfSell, pnl, drift, curPrice };
+    return { Q, buy, cBuy, own, D, st, prepayFee, totalForCover, costNow, costAccrued, costTotal, breakeven, coverAccrued, coverAll, market, netIfSell, pnl, drift, curPrice };
   }
 
   /* ---------------- 实时行情（东方财富，已验证支持跨域） ---------------- */
@@ -300,7 +302,7 @@
       '<div class="form-sec">贷款信息（照平台页面填，借呗 / 微粒贷都显示这几项）</div>' +
       ui.form([
         { name: 'loanName', label: '平台 / 名称', value: d('loanName', ''), placeholder: '如：支付宝借呗 / 微信微粒贷', row: 1 },
-        { name: 'principal', label: '借款金额(元)', type: 'number', value: d('principal', ''), required: true, min: 0, flex: 1, row: 2 },
+        { name: 'principal', label: '贷款金额(元) · 仅借款部分', type: 'number', value: d('principal', ''), required: true, min: 0, flex: 1, row: 2 },
         { name: 'termMonths', label: '借款期限(月)', type: 'number', value: d('termMonths', 3), min: 1, flex: 1, row: 2 },
         { name: 'method', label: '还款方式', type: 'select', value: d('method', 'daily'), flex: 1, row: 3, options: Object.keys(METHOD).map(k => ({ value: k, label: METHOD[k] })) },
         { name: 'termInterest', label: '期限总利息(元) · 平台显示', type: 'number', value: d('termInterest', ''), min: 0, flex: 1, row: 3 },
@@ -311,22 +313,23 @@
         { name: 'dayBasis', label: '日利率基准', type: 'select', value: String(d('dayBasis', 360)), flex: 1, row: 6, options: [{ value: '360', label: '360天(银行常用)' }, { value: '365', label: '365天' }] },
         { name: 'prepayFeeRate', label: '提前还款违约金 %(选填)', type: 'number', value: d('prepayFeeRate', 0), min: 0, row: 6 }
       ]) +
-      '<div class="hint muted">利率三种填法任选其一（优先级：①手填日利率 ②期限总利息反推 ③年利率）：日利率手动填了就直接用；「期限总利息」填平台显示的借N个月共多少利息，会反推真实利率，也是「覆盖总利息价」的依据；年利率选填。都空则利息按 0 计。</div>' +
+      '<div class="hint muted">「贷款金额」只填借来的钱；买入总价减去它＝你的自有本金，两者都会被保本价同时保护（不会把你的本金算成贷款）。利率三种填法任选其一（优先级：①手填日利率 ②期限总利息反推 ③年利率）：日利率手动填了就直接用；「期限总利息」填平台显示的借N个月共多少利息，会反推真实利率，也是「覆盖总利息价」的依据；年利率选填。都空则利息按 0 计。</div>' +
       '<div class="form-sec">股票持仓（买入价手动填，之后按实时行情跟踪）</div>' +
       ui.form([
         { name: 'stockCode', label: '股票代码', value: d('stockCode', ''), required: true, placeholder: '如 600519', flex: 1, row: 1 },
         { name: 'quantity', label: '买入数量(股)', type: 'number', value: d('quantity', ''), required: true, min: 1, flex: 1, row: 1 },
-        { name: 'buyPrice', label: '买入价(元)', type: 'number', value: d('buyPrice', ''), required: true, min: 0, flex: 1, row: 2 },
+        { name: 'buyPrice', label: '买入价(元) · 已含买入费用', type: 'number', value: d('buyPrice', ''), required: true, min: 0, flex: 1, row: 2 },
         { name: 'buyDate', label: '买入日期', type: 'date', value: d('buyDate', todayISO()), flex: 1, row: 2 }
       ]) +
-      '<div class="form-sec">交易费率（已预置 A 股现行标准，按你的券商改）</div>' +
+      '<div id="f-own" class="hint muted"></div>' +
+      '<div class="form-sec">交易费率（国信证券默认，按你的账户改）</div>' +
       ui.form([
         { name: 'commissionRate', label: '佣金率 %（万2.5 = 0.025）', type: 'number', value: d('commissionRate', DEF.commissionRate), min: 0, flex: 1, row: 1 },
         { name: 'minCommission', label: '单笔最低佣金(元)', type: 'number', value: d('minCommission', DEF.minCommission), min: 0, flex: 1, row: 1 },
         { name: 'stampRate', label: '印花税 %（仅卖出）', type: 'number', value: d('stampRate', DEF.stampRate), min: 0, flex: 1, row: 2 },
         { name: 'transferRate', label: '过户费 %（双边）', type: 'number', value: d('transferRate', DEF.transferRate), min: 0, flex: 1, row: 2 }
       ]) +
-      '<div class="hint muted">佣金万2.5 = 0.025%；印花税 2023-08-28 起减半为 0.05% 单边；过户费 2022-04-29 起沪深两市 0.001% 双向。</div>';
+      '<div class="hint muted">你使用国信证券：买入价已含买入佣金与过户费，下方费率仅用于计算「卖出」时的费用——佣金(万2.5/最低5元) + 印花税(0.05% 单边) + 过户费(0.001% 双边，卖出侧)。都可在设置里改成你的真实费率。</div>';
   }
 
   function openForm(rec, onSaved) {
@@ -370,6 +373,23 @@
     hint.className = 'hint muted'; hint.textContent = METHOD_HINT[sel.value] || '';
     sel.parentNode.appendChild(hint);
     sel.addEventListener('change', () => { hint.textContent = METHOD_HINT[sel.value] || ''; });
+    // 实时计算「自有本金 = 买入总价 − 贷款金额」
+    const ownEl = m.dialog.querySelector('#f-own');
+    const updOwn = () => {
+      if (!ownEl) return;
+      const bp = parseFloat(m.dialog.querySelector('#f-buyPrice').value) || 0;
+      const q = parseFloat(m.dialog.querySelector('#f-quantity').value) || 0;
+      const loan = parseFloat(m.dialog.querySelector('#f-principal').value) || 0;
+      const total = bp * q;
+      const own = Math.max(0, total - loan);
+      ownEl.innerHTML = '买入总成本 <b>' + money(total) + '</b> ＝ 贷款 <b>' + money(loan) + '</b> ＋ 自有本金 <b>' + money(own) + '</b>'
+        + (loan > total && total > 0 ? '<br>⚠️ 贷款大于买入，差额为未投入现金，仍按全额计息' : '');
+    };
+    ['buyPrice', 'quantity', 'principal'].forEach(id => {
+      const el = m.dialog.querySelector('#f-' + id);
+      if (el) el.addEventListener('input', updOwn);
+    });
+    updOwn();
     ui.bindFormValidation(m.dialog);
   }
 
@@ -453,11 +473,12 @@
       '<div class="card section">' +
         '<div class="sec-title">成本拆解（按 ' + c.Q + ' 股）</div>' +
         '<div class="kv-list">' +
-          '<div class="kv"><span class="k">买入金额</span><span class="v">' + money(c.buy) + '</span></div>' +
-          '<div class="kv"><span class="k">买入手续费</span><span class="v">' + money(c.cBuy) + '</span></div>' +
+          '<div class="kv"><span class="k">买入金额(已含买入费)</span><span class="v">' + money(c.buy) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 贷款本金</span><span class="v">' + money0(st.P) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 自有本金</span><span class="v">' + money0(c.own) + '</span></div>' +
           '<div class="kv"><span class="k">贷款已计息 <i class="muted">第 ' + c.D + ' 天</i></span><span class="v">' + money(st.accrued) + '</span></div>' +
           '<div class="kv"><span class="k">提前还款违约金</span><span class="v">' + money(c.prepayFee) + '</span></div>' +
-          '<div class="kv total"><span class="k">还贷成本合计</span><span class="v">' + money(c.costNow) + '</span></div>' +
+          '<div class="kv total"><span class="k">保本总成本(含利息)</span><span class="v">' + money(c.costNow) + '</span></div>' +
           (c.curPrice ? '<div class="kv"><span class="k">当前市值</span><span class="v">' + money(c.market) + '</span></div>' +
             '<div class="kv"><span class="k">卖出到手（扣费）</span><span class="v">' + money(c.netIfSell) + '</span></div>' +
             '<div class="kv total"><span class="k">卖出盈亏</span><span class="v ' + cls(c.pnl) + '">' + money(c.pnl) + '</span></div>' : '') +
@@ -467,7 +488,8 @@
       '<div class="card section">' +
         '<div class="sec-title">贷款信息</div>' +
         '<div class="kv-list">' +
-          '<div class="kv"><span class="k">本金 / 有效利率</span><span class="v">' + money0(st.P) + ' · ' + rateDisp + '</span></div>' +
+          '<div class="kv"><span class="k">贷款本金 / 自有本金</span><span class="v">' + money0(st.P) + ' / ' + money0(c.own) + '</span></div>' +
+          '<div class="kv"><span class="k">有效利率</span><span class="v">' + rateDisp + '</span></div>' +
           '<div class="kv"><span class="k">还款方式</span><span class="v">' + METHOD[rec.method || 'daily'] + '</span></div>' +
           '<div class="kv"><span class="k">期限 / 起息日</span><span class="v">' + st.n + ' 个月 · ' + ui.escapeHtml(rec.startDate || '') + '</span></div>' +
           '<div class="kv"><span class="k">每日新增利息</span><span class="v lv-warn">' + money(st.daily) + ' / 天</span></div>' +
@@ -573,7 +595,8 @@
             '<div class="lev-title">' + ui.escapeHtml(r.loanName || '贷款') +
               ' <span class="muted">→ ' + ui.escapeHtml(r.stockCode) + '</span></div>' +
             '<div class="lev-nums">' +
-              '<span>本金 <b>' + money0(r.principal) + '</b></span>' +
+              '<span>贷 <b>' + money0(r.principal) + '</b></span>' +
+              '<span>自有 <b>' + money0(c.own) + '</b></span>' +
               '<span>买入 <b>' + num(r.buyPrice).toFixed(2) + '</b></span>' +
               '<span>保本 <b class="lv-warn">' + c.breakeven.toFixed(2) + '</b></span>' +
               '<span>覆息 <b class="lv-danger">' + c.coverAll.toFixed(2) + '</b></span>' +
