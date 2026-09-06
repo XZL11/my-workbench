@@ -285,6 +285,101 @@
     });
   }
 
+  /* ---------------- 个股新闻 / 公司公告（东财：请求带 Origin 时回显 CORS *，静态站可直连） ---------------- */
+  async function fetchNews(code, limit) {
+    const param = JSON.stringify({
+      uid: '', keyword: String(code), type: ['cmsArticleWebOld'],
+      client: 'web', clientType: 'web', clientVersion: 'curr',
+      param: { cmsArticleWebOld: { searchScope: 'default', sort: 'time', pageIndex: 1, pageSize: (limit || 8), preTag: '', postTag: '' } }
+    });
+    const url = 'https://search-api-web.eastmoney.com/search/jsonp?cb=cb&param=' + encodeURIComponent(param);
+    const r = await fetch(url, { cache: 'no-store' });
+    const txt = await r.text();
+    const m = txt.match(/cb\((\{[\s\S]*\})\)\s*$/) || txt.match(/^(\{[\s\S]*\})$/);
+    if (!m) return [];
+    let j = null; try { j = JSON.parse(m[1]); } catch (e) { return []; }
+    const arr = (j && j.result && j.result.cmsArticleWebOld) || [];
+    return arr.map(it => ({
+      title: String(it.title || '').replace(/<[^>]+>/g, ''),
+      date: String(it.date || '').slice(0, 16),
+      media: String(it.mediaName || ''),
+      url: String(it.url || '')
+    })).filter(x => x.title);
+  }
+  async function fetchAnn(code, limit) {
+    const url = 'https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=' + (limit || 5) +
+      '&page_index=1&ann_type=A&client_source=web&stock_list=' + encodeURIComponent(code);
+    const r = await fetch(url, { cache: 'no-store' });
+    const j = await r.json();
+    const arr = (j && j.data && j.data.list) || [];
+    return arr.map(it => ({
+      title: String(it.title || it.title_ch || '').replace(/<[^>]+>/g, ''),
+      date: String(it.display_time || it.notice_date || '').slice(0, 16),
+      url: 'https://data.eastmoney.com/notices/detail/' + code + '/' + it.art_code + '.html'
+    })).filter(x => x.title);
+  }
+
+  /* ---------------- AI 日报：每日 07:00 自动刷新，按股票代码缓存（表 levai） ---------------- */
+  const AI_HOUR = 7;
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // 当日 07:00 之前算作「昨天」——过了 7 点才算新的一天
+  function digestKey() {
+    const d = new Date();
+    if (d.getHours() < AI_HOUR) d.setDate(d.getDate() - 1);
+    return ymd(d);
+  }
+  function msToNextAI() {
+    const now = new Date();
+    const t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), AI_HOUR, 0, 0, 0);
+    if (t.getTime() <= now.getTime()) t.setDate(t.getDate() + 1);
+    return t.getTime() - now.getTime();
+  }
+
+  // 生成当日研判：把真实行情 + 真实新闻/公告交给 AI 归纳；失败时降级为只显示新闻，不影响其余功能
+  async function buildDigest(rec, q, ks) {
+    const code = rec.stockCode;
+    let news = [], ann = [];
+    try { news = await withTimeout(fetchNews(code, 8), 9000); } catch (e) { news = []; }
+    try { ann = await withTimeout(fetchAnn(code, 5), 9000); } catch (e) { ann = []; }
+
+    const d = { stance: '中性', score: 3, summary: '', reasons: [], watch: [], risk: '', error: '' };
+    const newsTxt = news.slice(0, 8).map(n => '- ' + n.date + ' ' + n.title + (n.media ? '（' + n.media + '）' : '')).join('\n') || '（暂无）';
+    const annTxt = ann.slice(0, 5).map(a => '- ' + a.date + ' ' + a.title).join('\n') || '（暂无）';
+    const kTxt = (ks || []).slice(-6).map(k => k.date.slice(5) + ' 收 ' + k.close).join('；') || '（暂无）';
+    const qTxt = q ? ('最新价 ' + q.price.toFixed(2) + '，涨跌幅 ' + q.chgPct.toFixed(2) + '%，今开 ' + q.open.toFixed(2) +
+      '，最高 ' + q.high.toFixed(2) + '，最低 ' + q.low.toFixed(2) + '，昨收 ' + q.preClose.toFixed(2)) : '（行情未获取）';
+
+    if (!WB.ai || !WB.ai.ask) {
+      d.error = 'AI 模块未加载，仅显示新闻';
+    } else {
+      const sys = '你是A股盘前研究助手。只依据给定的行情与新闻做条件化、概率化表述，'
+        + '禁止给出确定性涨跌承诺或具体买卖点，禁止编造给定材料之外的信息。输出必须是纯JSON，不要任何多余文字。';
+      const user = '股票：' + (rec.stockName || '') + '(' + code + ')\n'
+        + '当前行情：' + qTxt + '\n'
+        + '近6日收盘：' + kTxt + '\n'
+        + '相关新闻：\n' + newsTxt + '\n'
+        + '公司公告：\n' + annTxt + '\n'
+        + '请输出JSON：{"stance":"偏多|中性|偏空","score":1-5的整数,"summary":"80字内的当日研判",'
+        + '"reasons":["理由1","理由2","理由3"],"watch":["关注点1","关注点2"],"risk":"一条风险提示"}';
+      try {
+        const txt = await WB.ai.ask(sys, user);
+        const p = WB.ai.parseJSON(txt);
+        if (p) {
+          d.stance = (['偏多', '中性', '偏空'].indexOf(p.stance) >= 0) ? p.stance : '中性';
+          d.score = Math.min(5, Math.max(1, parseInt(p.score, 10) || 3));
+          d.summary = String(p.summary || '').slice(0, 200);
+          d.reasons = (p.reasons || []).map(String).filter(Boolean).slice(0, 4);
+          d.watch = (p.watch || []).map(String).filter(Boolean).slice(0, 4);
+          d.risk = String(p.risk || '').slice(0, 200);
+        } else {
+          d.summary = String(txt || '').slice(0, 300);
+          d.error = 'AI 返回格式异常，已原文展示';
+        }
+      } catch (e) { d.error = e.message || 'AI 生成失败'; }
+    }
+    return Object.assign({ id: code, code: code, date: digestKey(), ts: Date.now(), news: news, ann: ann }, d);
+  }
+
   /* ---------------- SVG 图表（含保本价参考线） ---------------- */
   function svgWrap(inner, extraLegends) {
     return '<svg class="chart" viewBox="0 0 640 250" preserveAspectRatio="xMidYMid meet" role="img">' +
@@ -465,8 +560,11 @@
   }
 
   /* ---------------- 详情视图 ---------------- */
-  let _timer = null;
-  function clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
+  let _timer = null, _aiTimer = null;
+  function clearTimer() {
+    if (_timer) { clearInterval(_timer); _timer = null; }
+    if (_aiTimer) { clearTimeout(_aiTimer); _aiTimer = null; }
+  }
 
   function scheduleHTML(rec, st) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -478,6 +576,60 @@
         '<span class="k">第 ' + (i + 1) + ' 期 · ' + ds + (matured ? ' ✓已到期' : (cur ? ' ◀当前' : '')) + '</span>' +
         '<span class="v">' + money(st.perInterest[i]) + (cur ? ' <i class="muted">本期按日息累计</i>' : '') + '</span></div>';
     }).join('');
+  }
+
+  function stanceCls(s) { return s === '偏多' ? 'lv-up' : (s === '偏空' ? 'lv-down' : ''); }
+
+  // AI 日报卡片（含新闻/公告列表 + 免责声明）
+  function aiCardHTML(dg, updating) {
+    let h = '<div class="lev-ai-headrow">' +
+      '<div class="sec-title" style="margin:0">AI 日报 <span class="muted">每日 ' + AI_HOUR + ':00 自动更新</span></div>' +
+      '<button class="btn ghost sm" id="lev-ai-refresh" title="立即重新生成">' + ui.icon('refresh', 15) + ' 重新生成</button>' +
+      '</div>';
+    if (!dg) {
+      h += updating
+        ? '<div class="lev-ai-loading muted"><span class="ai-dot"></span>正在抓取新闻并生成研判…</div>'
+        : '<div class="lev-nodata muted">暂无日报，点「重新生成」立即生成（需在「设置 → AI 助手」配置 API Key）。</div>';
+      return h;
+    }
+    const s = dg.stance || '中性';
+    const sc = Math.min(5, Math.max(1, dg.score || 3));
+    h += '<div class="lev-ai-top">' +
+      '<span class="lev-stance ' + stanceCls(s) + '">' + ui.escapeHtml(s) + '</span>' +
+      '<span class="lev-stars" title="强度 ' + sc + '/5">' + '★'.repeat(sc) + '☆'.repeat(5 - sc) + '</span>' +
+      '<span class="muted lev-ai-date">' + ui.escapeHtml(dg.date || '') + '</span></div>';
+    if (dg.summary) h += '<div class="lev-ai-summary">' + ui.escapeHtml(dg.summary) + '</div>';
+    if (dg.error) h += '<div class="lev-ai-err">' + ui.escapeHtml(dg.error) + '</div>';
+    if (dg.reasons && dg.reasons.length) {
+      h += '<div class="lev-ai-sub">研判要点</div><ul class="lev-ai-list">' +
+        dg.reasons.map(t => '<li>' + ui.escapeHtml(t) + '</li>').join('') + '</ul>';
+    }
+    if (dg.watch && dg.watch.length) {
+      h += '<div class="lev-ai-sub">今日关注</div><ul class="lev-ai-list">' +
+        dg.watch.map(t => '<li>' + ui.escapeHtml(t) + '</li>').join('') + '</ul>';
+    }
+    if (dg.risk) h += '<div class="lev-ai-risk">风险提示：' + ui.escapeHtml(dg.risk) + '</div>';
+    const news = dg.news || [];
+    if (news.length) {
+      h += '<div class="lev-ai-sub">相关新闻</div><div class="lev-ai-news">' + news.map(n =>
+        '<a class="lev-news" href="' + ui.escapeHtml(n.url || '#') + '" target="_blank" rel="noopener">' +
+        '<span class="ln-t">' + ui.escapeHtml(n.title) + '</span>' +
+        '<span class="ln-m muted">' + ui.escapeHtml((n.media ? n.media + ' · ' : '') + (n.date || '')) + '</span></a>'
+      ).join('') + '</div>';
+    } else {
+      h += '<div class="lev-ai-sub">相关新闻</div><div class="lev-nodata muted">暂未抓到相关新闻</div>';
+    }
+    const ann = dg.ann || [];
+    if (ann.length) {
+      h += '<div class="lev-ai-sub">公司公告</div><div class="lev-ai-news">' + ann.map(a =>
+        '<a class="lev-news" href="' + ui.escapeHtml(a.url || '#') + '" target="_blank" rel="noopener">' +
+        '<span class="ln-t">' + ui.escapeHtml(a.title) + '</span>' +
+        '<span class="ln-m muted">' + ui.escapeHtml(a.date || '') + '</span></a>'
+      ).join('') + '</div>';
+    }
+    if (updating) h += '<div class="lev-ai-updating muted"><span class="ai-dot"></span>正在更新今日日报…</div>';
+    h += '<div class="lev-ai-disclaimer">以上由 AI 依据公开行情与新闻自动生成，仅供参考，<b>不构成任何投资建议或买卖依据</b>。</div>';
+    return h;
   }
 
   function detailHTML(rec, q, c) {
@@ -553,6 +705,8 @@
         '<div id="lev-chartbox" class="lc-body"><div class="sk-line w70" style="height:180px"></div></div>' +
       '</div>' +
 
+      '<div class="card section" id="lev-aicard"></div>' +
+
       '<div class="card section">' +
         '<div class="sec-title">成本拆解（按 ' + c.Q + ' 股）</div>' +
         '<div class="kv-list">' +
@@ -602,11 +756,45 @@
     clearTimer();
     root.innerHTML = '<div class="page">' + ui.skeleton(3) + '</div>';
     let q = null, chartType = 'trend';
+    let lastDg = null, aiReady = false, aiBusy = false;
     try { q = await fetchQuote(rec.stockCode); } catch (e) { q = null; }
+
+    function paintAI(dg, updating) {
+      const box = root.querySelector('#lev-aicard');
+      if (!box) return;
+      box.innerHTML = aiCardHTML(dg, updating);
+      const btn = box.querySelector('#lev-ai-refresh');
+      if (btn) btn.onclick = () => { ensureDigest(true); };
+    }
+    // 到下一个 07:00 触发刷新（页面开着才走定时器；没开着则下次打开时补生成）
+    function scheduleAI() {
+      if (_aiTimer) clearTimeout(_aiTimer);
+      _aiTimer = setTimeout(() => { ensureDigest(true); }, msToNextAI());
+    }
+    async function ensureDigest(force) {
+      if (aiBusy) return;
+      let dg = null;
+      try { dg = await store.get('levai', rec.stockCode); } catch (e) { dg = null; }
+      if (!force && dg && dg.date === digestKey()) { lastDg = dg; aiReady = true; paintAI(dg, false); scheduleAI(); return; }
+      aiBusy = true;
+      paintAI(dg, true);
+      try {
+        const ks = await withTimeout(fetchKline(rec.stockCode, 6), 9000);
+        const nd = await buildDigest(rec, q, ks);
+        await store.put('levai', nd);
+        lastDg = nd; paintAI(nd, false);
+      } catch (e) {
+        paintAI(dg, false);
+        ui.toast('AI 日报生成失败：' + ((e && e.message) || e), 'warn');
+      }
+      aiBusy = false; aiReady = true;
+      scheduleAI();
+    }
 
     function paint() {
       const c = calc(rec, q ? q.price : null);
       root.innerHTML = detailHTML(rec, q, c);
+      paintAI(lastDg, !aiReady);
       root.querySelector('#lev-back').onclick = () => { clearTimer(); render(root); };
       root.querySelector('#lev-edit').onclick = () => openForm(rec, () => openDetail(root, rec));
       root.querySelector('#lev-refresh').onclick = async () => {
@@ -651,6 +839,7 @@
     }
 
     paint();
+    ensureDigest(false);
     // 交易时段每 30 秒自动刷新行情
     _timer = setInterval(async () => {
       try { const nq = await fetchQuote(rec.stockCode); if (nq && nq.price) { q = nq; paint(); } } catch (e) { /* 忽略 */ }
@@ -741,7 +930,8 @@
   }
 
   // 暴露纯计算函数，便于校验与跨模块复用
-  WB.leverage = { METHOD, METHOD_HINT, DEF, loanState, solvePrice, calc, rates, buyFees, sellFees, daysBetween, marketOf };
+  WB.leverage = { METHOD, METHOD_HINT, DEF, loanState, solvePrice, calc, rates, buyFees, sellFees, daysBetween, marketOf,
+    AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
 
   WB.modules.push({ id: 'leverage', title: '杠杆测算', icon: 'trendingUp', render });
 })(window.WB = window.WB || {});
