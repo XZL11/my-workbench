@@ -1603,7 +1603,7 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
 .lev-nodata { padding: 18px 4px; text-align: center; font-size: 13px; }
 
 /* 两个关键价 */
-.lev-keygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lev-keygrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .card.lev-key { display: block; padding: 13px 14px; }
 .card.lev-key.lv-ok {
   border-color: color-mix(in srgb, var(--success) 45%, transparent);
