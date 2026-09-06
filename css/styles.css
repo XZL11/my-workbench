@@ -1642,6 +1642,11 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
   color: var(--muted); opacity: .85;
 }
 
+/* 还款计划：已到期期淡化、当前期高亮 */
+.card.section .kv-done { opacity: .62; }
+.card.section .kv-done .k { color: var(--success); }
+.card.section .kv-cur { background: var(--primary-weak); border-radius: 6px; margin: 2px -8px; padding-left: 8px; padding-right: 8px; }
+
 @media (max-width: 560px) {
   .lev-keygrid { grid-template-columns: 1fr; }
   .lq-grid { grid-template-columns: repeat(2, 1fr); }
