@@ -81,7 +81,44 @@
     return { rM: 0, rD: 0, src: 'none', termInterest: null, impliedAnnual: 0 };
   }
 
-  // 输入记录 + 已计息天数 D，输出各类利息/剩余本金
+  // 每期利息：手填优先（逗号/空格/中文逗号分隔），否则按「期限总利息」平均
+  function parsePeriodInterests(rec, n, effTotal) {
+    let arr = [];
+    if (rec.periodInterests != null && String(rec.periodInterests).trim() !== '') {
+      arr = String(rec.periodInterests).split(/[,，\s]+/).map(s => num(s)).filter(v => isFinite(v) && v >= 0);
+    }
+    if (arr.length === n) return arr;
+    const avg = n > 0 ? effTotal / n : 0;
+    return Array(n).fill(avg);
+  }
+
+  // 还款计划：默认每月 repayDay 号；首期=起息日当月（或次月）的 repayDay
+  function buildSchedule(rec, n) {
+    const start = rec.startDate ? new Date(rec.startDate + 'T00:00:00') : new Date();
+    const day = Math.min(28, Math.max(1, Math.round(num(rec.repayDay, 25))));
+    let first;
+    if (start.getDate() <= day) first = new Date(start.getFullYear(), start.getMonth(), day);
+    else first = new Date(start.getFullYear(), start.getMonth() + 1, day);
+    const dates = [];
+    for (let i = 0; i < n; i++) dates.push(new Date(first.getFullYear(), first.getMonth() + i, day));
+    return dates;
+  }
+
+  // 经过 k 个完整还款期后的剩余本金
+  function principalAfter(P, n, method, k, rM) {
+    if (method === 'interestFirst') return P;                   // 到期一次还本
+    if (method === 'equalPrincipal') return Math.max(0, P - P / n * k);
+    if (method === 'equalInstallment') {
+      if (rM === 0) return Math.max(0, P - P / n * k);
+      const g = Math.pow(1 + rM, k);
+      const M = P * rM * Math.pow(1 + rM, n) / (Math.pow(1 + rM, n) - 1);
+      return Math.max(0, P * g - M * (g - 1) / rM);
+    }
+    return P;
+  }
+
+  // 输入记录 + 已计息天数 D，输出各类利息/剩余本金。
+  // 随借随还：按日计息；其余三种：已到期各期用「固定每期利息」，当前未到期期按「日利息×剩余本金×已过天数」(提前还款口径)。
   function loanState(rec, D) {
     const P = num(rec.principal);
     const n = Math.max(1, num(rec.termMonths, 3));
@@ -90,41 +127,52 @@
     const rM = eff.rM, rD = eff.rD;
     const o = {
       P, n, rD, rM, method, D, daily: P * rD, accrued: 0, remaining: P,
-      total: 0, periods: 0, extra: 0,
-      rateSource: eff.src, termInterest: eff.termInterest, impliedAnnual: eff.impliedAnnual
+      total: 0, rateSource: eff.src, termInterest: eff.termInterest, impliedAnnual: eff.impliedAnnual,
+      schedule: [], perInterest: [], maturedCount: 0, accruedMatured: 0, accruedDaily: 0
     };
 
     if (method === 'daily') {
       o.accrued = P * rD * D;
       o.remaining = P;
       o.total = P * rD * (n * 30);
+      o.daily = P * rD;
       return o;
     }
-    const k = Math.min(n, Math.floor(D / 30));  // 已完整经过的还款期数
-    const dIn = Math.max(0, D - k * 30);        // 当期已过天数（提前还款按日补齐）
-    o.periods = k;
 
-    if (method === 'equalInstallment') {
-      const M = rM === 0 ? P / n : P * rM * Math.pow(1 + rM, n) / (Math.pow(1 + rM, n) - 1);
-      const g = Math.pow(1 + rM, k);
-      const rem = rM === 0 ? P - (P / n) * k : P * g - M * (g - 1) / rM;
-      o.remaining = Math.max(0, rem);
-      o.accrued = Math.max(0, k * M - (P - o.remaining));
-      o.total = n * M - P;
-      o.extra = o.remaining * rD * dIn;
-    } else if (method === 'equalPrincipal') {
-      const perP = P / n;
-      o.remaining = Math.max(0, P - perP * k);
-      o.accrued = rM * (k * P - perP * (k * (k - 1) / 2));
-      o.total = P * rM * (n + 1) / 2;
-      o.extra = o.remaining * rD * dIn;
-    } else { // interestFirst 先息后本
-      o.remaining = P;
-      o.accrued = k * P * rM;
-      o.total = n * P * rM;
-      o.extra = P * rD * dIn;
+    // 整期总利息（平台报价优先，否则公式推算）
+    let tot;
+    if (eff.termInterest != null && eff.termInterest > 0) tot = eff.termInterest;
+    else if (method === 'equalPrincipal') tot = P * rM * (n + 1) / 2;
+    else if (method === 'interestFirst') tot = n * P * rM;
+    else { const M = rM === 0 ? P / n : P * rM * Math.pow(1 + rM, n) / (Math.pow(1 + rM, n) - 1); tot = n * M - P; }
+    o.total = tot;
+
+    // 每期利息（手填优先，否则平均）
+    const per = parsePeriodInterests(rec, n, tot);
+    const dates = buildSchedule(rec, n);
+    o.schedule = dates; o.perInterest = per;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let accrued = 0, matured = 0, maturedInt = 0, dailyInt = 0, rem = P;
+    let prev = rec.startDate ? new Date(rec.startDate + 'T00:00:00') : new Date(today);
+    for (let i = 0; i < n; i++) {
+      if (dates[i] <= today) {
+        accrued += per[i]; maturedInt += per[i]; matured++;
+        rem = principalAfter(P, n, method, matured, rM);
+        prev = dates[i];
+      } else {
+        const days = Math.max(0, Math.round((today - prev) / 86400000));
+        dailyInt = rD * rem * days;
+        accrued += dailyInt;
+        break;
+      }
     }
-    o.accrued += o.extra;
+    o.accrued = accrued;
+    o.accruedMatured = maturedInt;
+    o.accruedDaily = dailyInt;
+    o.maturedCount = matured;
+    o.remaining = rem;
+    o.daily = rD * rem;   // 当前未还本金的日利息
     return o;
   }
 
@@ -311,7 +359,9 @@
         { name: 'monthlyPayment', label: '每期应还(元) · 选填', type: 'number', value: d('monthlyPayment', ''), min: 0, flex: 1, row: 5 },
         { name: 'startDate', label: '起息日', type: 'date', value: d('startDate', todayISO()), required: true, flex: 1, row: 5 },
         { name: 'dayBasis', label: '日利率基准', type: 'select', value: String(d('dayBasis', 360)), flex: 1, row: 6, options: [{ value: '360', label: '360天(银行常用)' }, { value: '365', label: '365天' }] },
-        { name: 'prepayFeeRate', label: '提前还款违约金 %(选填)', type: 'number', value: d('prepayFeeRate', 0), min: 0, row: 6 }
+        { name: 'prepayFeeRate', label: '提前还款违约金 %(选填)', type: 'number', value: d('prepayFeeRate', 0), min: 0, row: 6 },
+        { name: 'repayDay', label: '每月还款日(号)', type: 'number', value: d('repayDay', 25), min: 1, max: 28, flex: 1, row: 7 },
+        { name: 'periodInterests', label: '每期利息(元)·选填·逗号分隔', type: 'text', value: d('periodInterests', ''), placeholder: '不同期利息不同就填，如 300,290,280；留空则按期限总利息平均', flex: 2, row: 7 }
       ]) +
       '<div class="hint muted">「贷款金额」只填借来的钱；买入总价减去它＝你的自有本金，两者都会被保本价同时保护（不会把你的本金算成贷款）。利率三种填法任选其一（优先级：①手填日利率 ②期限总利息反推 ③年利率）：日利率手动填了就直接用；「期限总利息」填平台显示的借N个月共多少利息，会反推真实利率，也是「覆盖总利息价」的依据；年利率选填。都空则利息按 0 计。</div>' +
       '<div class="form-sec">股票持仓（买入价手动填，之后按实时行情跟踪）</div>' +
@@ -352,6 +402,8 @@
           obj.startDate = g('startDate');
           obj.dayBasis = parseInt(g('dayBasis'), 10) || 360;
           obj.prepayFeeRate = num(g('prepayFeeRate'));
+          obj.repayDay = Math.min(28, Math.max(1, num(g('repayDay'), 25)));
+          obj.periodInterests = g('periodInterests').replace(/，/g, ',').trim();
           obj.stockCode = code;
           obj.quantity = Math.max(1, num(g('quantity'), 1));
           obj.buyPrice = num(g('buyPrice'));
@@ -396,6 +448,18 @@
   /* ---------------- 详情视图 ---------------- */
   let _timer = null;
   function clearTimer() { if (_timer) { clearInterval(_timer); _timer = null; } }
+
+  function scheduleHTML(rec, st) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return st.schedule.map((dt, i) => {
+      const ds = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+      const matured = dt <= today;
+      const cur = i === st.maturedCount;
+      return '<div class="kv' + (matured ? ' kv-done' : (cur ? ' kv-cur' : '')) + '">' +
+        '<span class="k">第 ' + (i + 1) + ' 期 · ' + ds + (matured ? ' ✓已到期' : (cur ? ' ◀当前' : '')) + '</span>' +
+        '<span class="v">' + money(st.perInterest[i]) + (cur ? ' <i class="muted">本期按日息累计</i>' : '') + '</span></div>';
+    }).join('');
+  }
 
   function detailHTML(rec, q, c) {
     const st = c.st;
@@ -476,7 +540,9 @@
           '<div class="kv"><span class="k">买入金额(已含买入费)</span><span class="v">' + money(c.buy) + '</span></div>' +
           '<div class="kv"><span class="k">└ 贷款本金</span><span class="v">' + money0(st.P) + '</span></div>' +
           '<div class="kv"><span class="k">└ 自有本金</span><span class="v">' + money0(c.own) + '</span></div>' +
-          '<div class="kv"><span class="k">贷款已计息 <i class="muted">第 ' + c.D + ' 天</i></span><span class="v">' + money(st.accrued) + '</span></div>' +
+          '<div class="kv"><span class="k">贷款已计息 <i class="muted">已到期 ' + st.maturedCount + '/' + st.n + ' 期</i></span><span class="v">' + money(st.accrued) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 已到期固定利息</span><span class="v">' + money(st.accruedMatured) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 本期日息累计</span><span class="v">' + money(st.accruedDaily) + (rec.method !== 'daily' ? ' <i class="muted">(提前还款口径)</i>' : '') + '</span></div>' +
           '<div class="kv"><span class="k">提前还款违约金</span><span class="v">' + money(c.prepayFee) + '</span></div>' +
           '<div class="kv total"><span class="k">保本总成本(含利息)</span><span class="v">' + money(c.costNow) + '</span></div>' +
           (c.curPrice ? '<div class="kv"><span class="k">当前市值</span><span class="v">' + money(c.market) + '</span></div>' +
@@ -484,6 +550,13 @@
             '<div class="kv total"><span class="k">卖出盈亏</span><span class="v ' + cls(c.pnl) + '">' + money(c.pnl) + '</span></div>' : '') +
         '</div>' +
       '</div>' +
+
+      (rec.method !== 'daily' ? (
+      '<div class="card section">' +
+        '<div class="sec-title">还款计划（每期利息' + (rec.periodInterests ? '·手填' : '·按总利息平均') + ' · 每月 ' + num(rec.repayDay, 25) + ' 号还款）</div>' +
+        '<div class="kv-list">' + scheduleHTML(rec, st) + '</div>' +
+      '</div>'
+      ) : '') +
 
       '<div class="card section">' +
         '<div class="sec-title">贷款信息</div>' +
@@ -602,7 +675,10 @@
               '<span>覆息 <b class="lv-danger">' + c.coverAll.toFixed(2) + '</b></span>' +
             '</div>' +
             '<div class="lev-sub muted">' + METHOD[r.method || 'daily'] + ' · ' + rateTxt +
-              (c.st.rateSource === 'implied' ? ' (平台反推)' : '') + ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.st.daily) + '</div>' +
+              (c.st.rateSource === 'implied' ? ' (平台反推)' : '') +
+              (r.method && r.method !== 'daily'
+                ? ' · 已到期 ' + c.st.maturedCount + '/' + c.st.n + ' 期 · 本期日息 ' + money(c.st.daily)
+                : ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.st.daily)) + '</div>' +
           '</div>' +
           '<div class="row-actions">' +
             '<button class="icon-btn del" title="删除">' + ui.icon('trash', 16) + '</button>' +
