@@ -58,17 +58,19 @@
     return (lo + hi) / 2;
   }
 
-  // 生效利率优先级：手填日利率 > 期限总利息反推 > 名义年利率 > 0
-  function effectiveRates(rec, P, n) {
+  // 生效利率优先级：手填日利率 > 总利息(平台/每期求和)反推 > 名义年利率 > 0
+  // termInterest 为已解析的「总利息」（可能来自平台期限总利息，也可能来自每期利息求和）
+  function effectiveRates(rec, P, n, termInterest) {
     const basis = num(rec.dayBasis, 360);
     const method = rec.method || 'daily';
     // 1) 手动日利率最高优先
     if (rec.dailyRate != null && rec.dailyRate !== '' && num(rec.dailyRate) > 0) {
       const rD = num(rec.dailyRate) / 100;
-      return { rM: rD * basis / 12, rD, src: 'manual', termInterest: null, impliedAnnual: rD * basis * 100 };
+      return { rM: rD * basis / 12, rD, src: 'manual', termInterest, impliedAnnual: rD * basis * 100 };
     }
-    // 2) 期限总利息反推（平台报价已含服务费/手续费，最贴近真实成本）
-    const ti = (rec.termInterest != null && rec.termInterest !== '') ? num(rec.termInterest) : null;
+    // 2) 总利息反推（平台报价已含服务费/手续费，最贴近真实成本；每期求和亦同）
+    const ti = (termInterest != null && termInterest > 0) ? termInterest
+      : ((rec.termInterest != null && rec.termInterest !== '') ? num(rec.termInterest) : null);
     if (ti != null && ti > 0) {
       const imp = impliedMonthlyRate(P, n, ti, method);
       if (imp != null) return { rM: imp, rD: imp * 12 / basis, src: 'implied', termInterest: ti, impliedAnnual: imp * 12 * 100 };
@@ -76,20 +78,15 @@
     // 3) 名义年利率
     if (rec.annualRate != null && rec.annualRate !== '') {
       const rM = num(rec.annualRate) / 100 / 12;
-      return { rM, rD: rM * 12 / basis, src: 'nominal', termInterest: null, impliedAnnual: num(rec.annualRate) };
+      return { rM, rD: rM * 12 / basis, src: 'nominal', termInterest, impliedAnnual: num(rec.annualRate) };
     }
-    return { rM: 0, rD: 0, src: 'none', termInterest: null, impliedAnnual: 0 };
+    return { rM: 0, rD: 0, src: 'none', termInterest, impliedAnnual: 0 };
   }
 
-  // 每期利息：手填优先（逗号/空格/中文逗号分隔），否则按「期限总利息」平均
-  function parsePeriodInterests(rec, n, effTotal) {
-    let arr = [];
-    if (rec.periodInterests != null && String(rec.periodInterests).trim() !== '') {
-      arr = String(rec.periodInterests).split(/[,，\s]+/).map(s => num(s)).filter(v => isFinite(v) && v >= 0);
-    }
-    if (arr.length === n) return arr;
-    const avg = n > 0 ? effTotal / n : 0;
-    return Array(n).fill(avg);
+  // 解析手填每期利息（逗号/空格/中文逗号分隔），返回过滤后的数组；不足 n 个返回空数组
+  function parsePeriodInterestsRaw(rec, n) {
+    if (rec.periodInterests == null || String(rec.periodInterests).trim() === '') return [];
+    return String(rec.periodInterests).split(/[,，\s]+/).map(s => num(s)).filter(v => isFinite(v) && v >= 0);
   }
 
   // 还款计划：默认每月 repayDay 号；首期=起息日当月（或次月）的 repayDay
@@ -123,32 +120,45 @@
     const P = num(rec.principal);
     const n = Math.max(1, num(rec.termMonths, 3));
     const method = rec.method || 'daily';
-    const eff = effectiveRates(rec, P, n);
+
+    // 手填每期利息
+    const perRaw = parsePeriodInterestsRaw(rec, n);
+    const perFilled = perRaw.length === n;
+    const sumPI = perFilled ? perRaw.reduce((a, b) => a + b, 0) : null;
+
+    // 总利息优先级：①平台期限总利息(更权威) ②手填每期求和 ③公式兜底
+    let termInterest = null, tiSource = 'none';
+    const tiPlatform = (rec.termInterest != null && rec.termInterest !== '') ? num(rec.termInterest) : null;
+    if (tiPlatform != null && tiPlatform > 0) { termInterest = tiPlatform; tiSource = 'platform'; }
+    else if (perFilled) { termInterest = sumPI; tiSource = 'period'; }
+
+    const eff = effectiveRates(rec, P, n, termInterest);
     const rM = eff.rM, rD = eff.rD;
     const o = {
       P, n, rD, rM, method, D, daily: P * rD, accrued: 0, remaining: P,
-      total: 0, rateSource: eff.src, termInterest: eff.termInterest, impliedAnnual: eff.impliedAnnual,
-      schedule: [], perInterest: [], maturedCount: 0, accruedMatured: 0, accruedDaily: 0
+      total: termInterest || 0, rateSource: eff.src, termInterest, impliedAnnual: eff.impliedAnnual,
+      tiSource, schedule: [], perInterest: [], perFilled, maturedCount: 0, accruedMatured: 0, accruedDaily: 0
     };
 
     if (method === 'daily') {
       o.accrued = P * rD * D;
       o.remaining = P;
-      o.total = P * rD * (n * 30);
+      o.total = termInterest != null ? termInterest : P * rD * (n * 30);
       o.daily = P * rD;
       return o;
     }
 
-    // 整期总利息（平台报价优先，否则公式推算）
-    let tot;
-    if (eff.termInterest != null && eff.termInterest > 0) tot = eff.termInterest;
-    else if (method === 'equalPrincipal') tot = P * rM * (n + 1) / 2;
-    else if (method === 'interestFirst') tot = n * P * rM;
-    else { const M = rM === 0 ? P / n : P * rM * Math.pow(1 + rM, n) / (Math.pow(1 + rM, n) - 1); tot = n * M - P; }
+    // 整期总利息（公式兜底：当无任何总利息来源但又有利率时）
+    let tot = termInterest != null ? termInterest : 0;
+    if (tot <= 0) {
+      if (method === 'equalPrincipal') tot = P * rM * (n + 1) / 2;
+      else if (method === 'interestFirst') tot = n * P * rM;
+      else { const M = rM === 0 ? P / n : P * rM * Math.pow(1 + rM, n) / (Math.pow(1 + rM, n) - 1); tot = n * M - P; }
+    }
     o.total = tot;
 
-    // 每期利息（手填优先，否则平均）
-    const per = parsePeriodInterests(rec, n, tot);
+    // 每期利息：仅当「每期利息」是总利息来源时才用手填值，否则按总利息平均（保证与权威总利息一致）
+    const per = (perFilled && tiSource === 'period') ? perRaw : Array(n).fill(n > 0 ? tot / n : 0);
     const dates = buildSchedule(rec, n);
     o.schedule = dates; o.perInterest = per;
 
@@ -349,21 +359,21 @@
     return '' +
       '<div class="form-sec">贷款信息（照平台页面填，借呗 / 微粒贷都显示这几项）</div>' +
       ui.form([
-        { name: 'loanName', label: '平台 / 名称', value: d('loanName', ''), placeholder: '如：支付宝借呗 / 微信微粒贷', row: 1 },
-        { name: 'principal', label: '贷款金额(元) · 仅借款部分', type: 'number', value: d('principal', ''), required: true, min: 0, flex: 1, row: 2 },
+        { name: 'loanName', label: '平台 / 名称', value: d('loanName', ''), placeholder: '如：支付宝借呗 / 微信微粒贷', flex: 1, row: 1 },
+        { name: 'principal', label: '贷款金额(元) · 仅借款部分', type: 'number', value: d('principal', ''), required: true, min: 0, flex: 1, row: 1 },
         { name: 'termMonths', label: '借款期限(月)', type: 'number', value: d('termMonths', 3), min: 1, flex: 1, row: 2 },
-        { name: 'method', label: '还款方式', type: 'select', value: d('method', 'daily'), flex: 1, row: 3, options: Object.keys(METHOD).map(k => ({ value: k, label: METHOD[k] })) },
+        { name: 'method', label: '还款方式', type: 'select', value: d('method', 'daily'), flex: 1, row: 2, options: Object.keys(METHOD).map(k => ({ value: k, label: METHOD[k] })) },
+        { name: 'startDate', label: '起息日', type: 'date', value: d('startDate', todayISO()), required: true, flex: 1, row: 3 },
         { name: 'termInterest', label: '期限总利息(元) · 平台显示', type: 'number', value: d('termInterest', ''), min: 0, flex: 1, row: 3 },
-        { name: 'dailyRate', label: '日利率 %(手动填·最高优先)', type: 'number', value: d('dailyRate', ''), min: 0, step: 0.0001, flex: 1, row: 4 },
-        { name: 'annualRate', label: '年利率 %(选填·次优先)', type: 'number', value: d('annualRate', ''), min: 0, flex: 1, row: 4 },
+        { name: 'periodInterests', label: '每期利息(元) · 逗号分隔', type: 'text', value: d('periodInterests', ''), placeholder: '不同期利息不同就填，如 300,290,280；不填总利息时自动求和当总利息；留空则按总利息平均', flex: 2, row: 4 },
         { name: 'monthlyPayment', label: '每期应还(元) · 选填', type: 'number', value: d('monthlyPayment', ''), min: 0, flex: 1, row: 5 },
-        { name: 'startDate', label: '起息日', type: 'date', value: d('startDate', todayISO()), required: true, flex: 1, row: 5 },
+        { name: 'dailyRate', label: '日利率 %(手动填·最高优先)', type: 'number', value: d('dailyRate', ''), min: 0, step: 0.0001, flex: 1, row: 5 },
+        { name: 'annualRate', label: '年利率 %(选填·次优先)', type: 'number', value: d('annualRate', ''), min: 0, flex: 1, row: 6 },
         { name: 'dayBasis', label: '日利率基准', type: 'select', value: String(d('dayBasis', 360)), flex: 1, row: 6, options: [{ value: '360', label: '360天(银行常用)' }, { value: '365', label: '365天' }] },
-        { name: 'prepayFeeRate', label: '提前还款违约金 %(选填)', type: 'number', value: d('prepayFeeRate', 0), min: 0, row: 6 },
         { name: 'repayDay', label: '每月还款日(号)', type: 'number', value: d('repayDay', 25), min: 1, max: 28, flex: 1, row: 7 },
-        { name: 'periodInterests', label: '每期利息(元)·选填·逗号分隔', type: 'text', value: d('periodInterests', ''), placeholder: '不同期利息不同就填，如 300,290,280；留空则按期限总利息平均', flex: 2, row: 7 }
+        { name: 'prepayFeeRate', label: '提前还款违约金 %(选填)', type: 'number', value: d('prepayFeeRate', 0), min: 0, flex: 1, row: 7 }
       ]) +
-      '<div class="hint muted">「贷款金额」只填借来的钱；买入总价减去它＝你的自有本金，两者都会被保本价同时保护（不会把你的本金算成贷款）。利率三种填法任选其一（优先级：①手填日利率 ②期限总利息反推 ③年利率）：日利率手动填了就直接用；「期限总利息」填平台显示的借N个月共多少利息，会反推真实利率，也是「覆盖总利息价」的依据；年利率选填。都空则利息按 0 计。</div>' +
+      '<div class="hint muted">「贷款金额」只填借来的钱；买入总价减去它＝你的自有本金，两者都会被保本价同时保护。<b>总利息二选一来源</b>：①填「期限总利息(平台显示)」最省事（两者都填以它为准）；②不填它、改填「每期利息」会自动求和当作总利息。利率三种填法优先级：①手填日利率 ②总利息反推 ③年利率；都不填则利息按 0 计。</div>' +
       '<div class="form-sec">股票持仓（买入价手动填，之后按实时行情跟踪）</div>' +
       ui.form([
         { name: 'stockCode', label: '股票代码', value: d('stockCode', ''), required: true, placeholder: '如 600519', flex: 1, row: 1 },
@@ -469,7 +479,7 @@
     else if (st.rateSource === 'nominal') rateDisp = num(rec.annualRate).toFixed(2) + '%';
     else rateDisp = '未设置，利息按 0 计';
     const tiDisp = (st.termInterest != null && st.termInterest > 0)
-      ? money(st.termInterest) + ' <i class="muted">(平台报价)</i>' : money(st.total);
+      ? money(st.termInterest) + (st.tiSource === 'period' ? ' <i class="muted">(每期求和)</i>' : (st.tiSource === 'platform' ? ' <i class="muted">(平台报价)</i>' : '')) : money(st.total);
     const mpDisp = rec.monthlyPayment ? money(rec.monthlyPayment) : '—';
     const gapBE = c.curPrice ? (c.breakeven - c.curPrice) / c.curPrice * 100 : 0;
     const gapCA = c.curPrice ? (c.coverAll - c.curPrice) / c.curPrice * 100 : 0;
@@ -553,7 +563,7 @@
 
       (rec.method !== 'daily' ? (
       '<div class="card section">' +
-        '<div class="sec-title">还款计划（每期利息' + (rec.periodInterests ? '·手填' : '·按总利息平均') + ' · 每月 ' + num(rec.repayDay, 25) + ' 号还款）</div>' +
+        '<div class="sec-title">还款计划（每期利息' + (st.perFilled ? '·手填' : '·按总利息平均') + ' · 每月 ' + num(rec.repayDay, 25) + ' 号还款）</div>' +
         '<div class="kv-list">' + scheduleHTML(rec, st) + '</div>' +
       '</div>'
       ) : '') +
@@ -662,7 +672,7 @@
         const c = calc(r, null);
         const rateTxt = c.st.rateSource === 'manual' ? num(r.dailyRate).toFixed(4) + '%/日'
           : (c.st.rateSource === 'implied' ? c.st.impliedAnnual.toFixed(2) + '%'
-          : (num(r.annualRate) ? num(r.annualRate).toFixed(2) + '%' : '按平台总利息'));
+          : (num(r.annualRate) ? num(r.annualRate).toFixed(2) + '%' : '按总利息'));
         return '<div class="card lev" data-id="' + r.id + '">' +
           '<div class="lev-main">' +
             '<div class="lev-title">' + ui.escapeHtml(r.loanName || '贷款') +
@@ -675,7 +685,7 @@
               '<span>覆息 <b class="lv-danger">' + c.coverAll.toFixed(2) + '</b></span>' +
             '</div>' +
             '<div class="lev-sub muted">' + METHOD[r.method || 'daily'] + ' · ' + rateTxt +
-              (c.st.rateSource === 'implied' ? ' (平台反推)' : '') +
+              (c.st.rateSource === 'implied' ? ' (反推)' : '') +
               (r.method && r.method !== 'daily'
                 ? ' · 已到期 ' + c.st.maturedCount + '/' + c.st.n + ' 期 · 本期日息 ' + money(c.st.daily)
                 : ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.st.daily)) + '</div>' +
