@@ -40,6 +40,10 @@
   function pct(n) { return (n >= 0 ? '+' : '') + (+n || 0).toFixed(2) + '%'; }
   // A 股习惯：涨红跌绿
   function cls(n) { return n > 0 ? 'lv-up' : (n < 0 ? 'lv-down' : ''); }
+  // 给 Promise 加超时，避免离线/被墙时保存卡死
+  function withTimeout(p, ms) {
+    return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+  }
 
   /* ---------------- 贷款利息引擎 ---------------- */
   // 由平台给出的「期限总利息」反推真实月利率（等额本息无闭式解，二分求解）。
@@ -422,6 +426,11 @@
           obj.minCommission = num(g('minCommission'), DEF.minCommission);
           obj.stampRate = num(g('stampRate'), DEF.stampRate);
           obj.transferRate = num(g('transferRate'), DEF.transferRate);
+          // 尽力解析股票名称并持久化，列表/标题即可直接显示（失败则留空，回退到代码）
+          try {
+            const nm = await withTimeout(fetchQuote(code).then(q => (q && q.name) ? q.name : null), 3500);
+            if (nm) obj.stockName = nm;
+          } catch (e) { /* 离线/超时则跳过，下次保存或列表回填时再试 */ }
           obj.updatedAt = Date.now();
           await store.put('leverage', obj);
           close();
@@ -662,6 +671,21 @@
 
     const list = root.querySelector('#list');
 
+    // v49 之前保存的记录没有 stockName，这里一次性回填；每个代码只尝试一次，避免死循环与重复请求
+    const triedNames = new Set();
+    async function backfillNames() {
+      const missing = recs.filter(r => !r.stockName && r.stockCode && !triedNames.has(r.stockCode));
+      if (!missing.length) return;
+      missing.forEach(r => triedNames.add(r.stockCode));
+      for (const r of missing) {
+        try {
+          const nm = await withTimeout(fetchQuote(r.stockCode).then(q => (q && q.name) ? q.name : null), 3500);
+          if (nm) { r.stockName = nm; await store.put('leverage', r); }
+        } catch (e) { /* 忽略，列表回退显示代码 */ }
+      }
+      paint();
+    }
+
     function paint() {
       if (!recs.length) {
         list.innerHTML = ui.emptyState('还没有测算，点新建录入一笔贷款 + 一只股票', { action: { label: '新建测算' } });
@@ -676,7 +700,7 @@
         return '<div class="card lev" data-id="' + r.id + '">' +
           '<div class="lev-main">' +
             '<div class="lev-title">' + ui.escapeHtml(r.loanName || '贷款') +
-              ' <span class="muted">→ ' + ui.escapeHtml(r.stockCode) + '</span></div>' +
+              ' <span class="muted">→ ' + ui.escapeHtml(r.stockName ? (r.stockName + ' ' + r.stockCode) : r.stockCode) + '</span></div>' +
             '<div class="lev-nums">' +
               '<span>贷 <b>' + money0(r.principal) + '</b></span>' +
               '<span>自有 <b>' + money0(c.own) + '</b></span>' +
@@ -695,6 +719,7 @@
           '</div>' +
         '</div>';
       }).join('');
+      backfillNames();
     }
 
     async function reload() { recs = (await store.getAll('leverage')).filter(r => !r._deleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); paint(); }
