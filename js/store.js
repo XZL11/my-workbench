@@ -3,9 +3,9 @@
   'use strict';
   WB.modules = WB.modules || []; // 功能模块注册表（模块文件先于 app.js 加载）
   const DB_NAME = 'workbench-db';
-  const DB_VERSION = 7; // v7：新增 jcai（竞彩 AI 分析/购彩参考缓存，仅本地、不参与云同步）
-  const STORES = ['tasks', 'calendar', 'notes', 'habits', 'habitlogs', 'bookmarks', 'finance', 'content', 'planning', 'reading', 'earnways', 'leverage', 'levai', 'jcai', 'meta'];
-  const SYNC_STORES = STORES.filter(s => s !== 'meta' && s !== 'levai' && s !== 'jcai');
+  const DB_VERSION = 8; // v8：新增 airecords（AI 记录库：全工作台 AI 产出本地存档，供管家检索优先，不参与云同步）
+  const STORES = ['tasks', 'calendar', 'notes', 'habits', 'habitlogs', 'bookmarks', 'finance', 'content', 'planning', 'reading', 'earnways', 'leverage', 'levai', 'jcai', 'airecords', 'meta'];
+  const SYNC_STORES = STORES.filter(s => s !== 'meta' && s !== 'levai' && s !== 'jcai' && s !== 'airecords');
   let _db = null;
   let _suppressSync = false; // 同步自身的写操作不触发再次同步，避免死循环
 
