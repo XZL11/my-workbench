@@ -202,6 +202,7 @@
     root.innerHTML = `
       <div class="page">
         ${ui.pageHead('home', '今日', { subtitle: ui.escapeHtml(greet) + '，' + dateStr + '<div class="muted" style="margin-top:2px">' + todo.length + ' 项待办 · ' + habitDone + '/' + habits.length + ' 习惯已打卡 · 本月结余 ' + (income - expense).toFixed(2) + '</div>' })}
+        <div id="quote-holder" class="home-quote"></div>
         ${spideyBanner}
         <div class="stat-row">
           <div class="stat"><div class="stat-num" id="stat-todo">${todo.length}</div><div class="stat-label">待办（含逾期）</div></div>
@@ -232,6 +233,72 @@
 
     // 选题推荐面板为异步拉取，渲染后填充（不阻塞首页其余面板）
     fillRecommendPanel();
+
+    // ===== 版头今日语录：只从「带标签的笔记」中取，AI 提炼励志句 =====
+    async function pickNote() {
+      let all = [];
+      try { all = (await store.getAll('notes')).filter(i => !i._deleted); } catch (e) { all = []; }
+      const pool = all.filter(n => Array.isArray(n.tags) && n.tags.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      if (!pool.length) return null;
+      const len = pool.length;
+      const offset = Number(await store.getMeta('home_quote_off', 0)) || 0;
+      // 每天的起始索引随日期轮转，保证每天自动换一篇；「换一句」在偏移上 +1
+      const base = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 1)) / 86400000);
+      return pool[(((base + offset) % len) + len) % len];
+    }
+    async function quoteFor(n) {
+      const sys = '你是文学金句提炼助手。从用户笔记内容中提炼一句简短、有力量、适合展示在首页的励志/共鸣语录（30-60字）。硬性要求：正向鼓励但不空喊口号；提炼自原文思想，不编造数据与事实；不要引用别人名言原句；不要加书名号、引号、冒号或署名。直接输出那句话本身。';
+      const body = String(n.body || '').replace(/\s+/g, ' ').slice(0, 1500);
+      const user = '笔记标题：' + (n.title || '无标题') + '\n笔记标签：' + (n.tags || []).join('、') + '\n笔记内容：' + (body || '（空）') + '\n\n请输出一句话。';
+      const text = await WB.ai.ask(sys, user, { src: 'notes_quote' });
+      return (text || '').trim().replace(/^[「“"'']+|[」”"'']+$/g, '');
+    }
+    async function fillQuote() {
+      const holder = root.querySelector('#quote-holder');
+      if (!holder) return;
+      const note = await pickNote();
+      if (!note) {
+        holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">给自己的笔记加上「标签」，这里会自动生成你的专属励志语录。</div>';
+        return;
+      }
+      const paintNote = () => {
+        if (!note.quote) {
+          holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">AI 正在从《' + ui.escapeHtml(note.title || '无标题') + '》里提炼今日语录…</div>';
+          return;
+        }
+        holder.innerHTML =
+          '<span class="hq-mark">💬</span>' +
+          '<div class="hq-main">' +
+            '<div class="hq-quote">“' + ui.escapeHtml(note.quote) + '”</div>' +
+            '<div class="hq-src muted">—— 摘自已打标签的笔记《' + ui.escapeHtml(note.title || '无标题') + '》</div>' +
+          '</div>' +
+          '<button class="btn ghost sm" id="quote-next" title="换一句">↻ 换一句</button>';
+        holder.querySelector('#quote-next').onclick = async () => {
+          const off = (Number(await store.getMeta('home_quote_off', 0)) || 0) + 1;
+          await store.setMeta('home_quote_off', off);
+          await fillQuote();
+        };
+      };
+      paintNote();
+      if (!note.quote) {
+        if (!(WB.ai && WB.ai.ask) || !(await WB.ai.isConfigured().catch(() => false))) {
+          holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">开启 AI（设置 → AI 助手）后，这里会从你带标签的笔记里提炼每日语录。</div>';
+          return;
+        }
+        try {
+          const q = await quoteFor(note);
+          if (q) { note.quote = q; try { await store.put('notes', note); } catch (e) {} }
+        } catch (e) {
+          holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">语录生成失败：' + ui.escapeHtml(e && e.message ? e.message : e) + '</div>' +
+            '<button class="btn ghost sm" id="quote-next">↻ 重试</button>';
+          const rb = holder.querySelector('#quote-next');
+          if (rb) rb.onclick = () => fillQuote();
+          return;
+        }
+        paintNote();
+      }
+    }
+    fillQuote();
 
     // 待办交互（含子任务）
     const tl = root.querySelector('#todolist');
