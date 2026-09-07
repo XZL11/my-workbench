@@ -41,7 +41,8 @@
     if (!o || !o.a) return;
     try {
       const rec = {
-        id: (WB.store && WB.store.uid) ? WB.store.uid() : ('r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)),
+        // 传 o.key 时用固定 id（同 key 覆盖，用于“一篇笔记一条语录”这类去重场景）
+        id: o.key ? String(o.key) : ((WB.store && WB.store.uid) ? WB.store.uid() : ('r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8))),
         kind: o.kind || 'ask',
         src: o.src || '',
         q: String(o.q || '').slice(0, 500),
@@ -139,7 +140,7 @@
         const t = turns[i];
         if (t && t.role !== 'assistant' && t.content) { lastUser = t.content; break; }
       }
-      try { await saveRecord({ kind: (opts && opts.kind) || 'chat', src: (opts && opts.src) || '', q: lastUser, a: text }); } catch (e) {}
+      try { await saveRecord({ kind: (opts && opts.kind) || 'chat', src: (opts && opts.src) || '', q: lastUser, a: text, key: opts && opts.key }); } catch (e) {}
     }
     return text.trim();
   }
