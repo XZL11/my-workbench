@@ -33,7 +33,7 @@
   const STOP_CHARS = new Set(('帮我帮请请问呢吗嘛呀的了吗了和或与及个一种些这那哪些什么怎么如何能不能能否给我我想我 你你们它它们').split(''));
   // STOP_CHARS 额外手动补充
   ['帮','我','请','问','吗','么','什','这','那','的','了','和','与','及','个','一','种','些','很','就','都','还','也','要','是','在','对','把','被','给','为','从','到','说','想','能','该','会','有','做','来','去','看','写','查','找','出','下','上','不','没','无','并','或','但','而','其','它','们','哪','里','多','少','大','小','再','次','让','你','您','什么','怎么','如何','哪些','一下'].forEach(ch => STOP_CHARS.add(ch));
-  const RECORD_SRC = { butler: '管家对话', content: '创作助手', calendar: '日程·拆解', planning: '规划助手', notes: '笔记助手', notes_summary: '笔记摘要', finance: '记账分析', today_brief: '今日简报', leverage: '杠杆AI日报', lottery: '竞彩分析', assist: 'AI 助手' };
+  const RECORD_SRC = { butler: '管家对话', content: '创作助手', calendar: '日程·拆解', planning: '规划助手', notes: '笔记助手', notes_summary: '笔记摘要', notes_quote: '笔记语录', finance: '记账分析', today_brief: '今日简报', leverage: '杠杆AI日报', lottery: '竞彩分析', assist: 'AI 助手' };
 
   function recSrcLabel(src) { return RECORD_SRC[src] || src || '工作台'; }
 
