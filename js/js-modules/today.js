@@ -324,7 +324,7 @@
       btn.disabled = true; btn.textContent = '生成中…';
       try {
         const ctx = await buildBriefContext();
-        const text = await WB.ai.ask(BRIEF_SYSTEM, ctx);
+        const text = await WB.ai.ask(BRIEF_SYSTEM, ctx, { src: 'today_brief' });
         body.className = 'ai-brief-body';
         body.innerHTML = ui.mdLite(text);
         btn.textContent = '重新生成';
