@@ -138,6 +138,7 @@
         title: 'AI 建议：' + (p.title || ''),
         system: sys,
         user: user,
+        src: 'planning',
         adoptLabel: '采纳为环节',
         onAdopt: (txt) => {
           const lines = WB.ai.parseLines(txt);
