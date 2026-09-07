@@ -1743,3 +1743,30 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
 .jc-toolbar .btn.sm { line-height: 1; }
 
 
+
+/* ===== AI 管家 · 记录库引用气泡 ===== */
+.msg.ai.rec { max-width: 92%; }
+.rec-note { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 8px; background: color-mix(in srgb, var(--primary) 6%, transparent); border-radius: 10px; padding: 8px 10px; }
+.rec-item { border: 1px dashed var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+.rec-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 4px; }
+.rec-meta b { color: var(--primary); }
+.rec-q { font-size: 12px; margin-bottom: 3px; }
+.rec-a { font-size: 13px; line-height: 1.6; color: var(--text); white-space: pre-wrap; margin-bottom: 6px; }
+.rec-regen { margin-top: 4px; }
+/* ===== AI 管家 · 记录库弹窗 ===== */
+.lib-bar { display: flex; gap: 8px; margin-bottom: 8px; }
+.lib-bar .input { flex: 1; }
+.lib-srcs { margin-bottom: 8px; overflow-x: auto; flex-wrap: nowrap; }
+.lib-count { font-size: 12px; margin-bottom: 6px; }
+.lib-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow: auto; padding-right: 2px; }
+.lib-row { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+.lib-top { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 3px; }
+.lib-top b { color: var(--primary); }
+.lib-ops { margin-left: auto; display: flex; gap: 4px; }
+.lib-q { font-size: 12px; margin-bottom: 3px; }
+.lib-a { font-size: 12.5px; color: var(--text); line-height: 1.55; white-space: pre-wrap; }
+.lib-empty { text-align: center; padding: 22px 8px; font-size: 13px; line-height: 1.7; }
+.lib-detail .k { font-size: 12px; margin-bottom: 4px; font-weight: 600; }
+.lib-detail-q { margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
+.lib-detail-a pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.7; margin: 0; font-family: inherit; max-height: 46vh; overflow: auto; }
+.chips.lib-srcs .chip { flex: 0 0 auto; }
