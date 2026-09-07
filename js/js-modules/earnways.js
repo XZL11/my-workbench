@@ -27,8 +27,70 @@
         ], row: 5 },
       { name: 'level', label: '难度', type: 'select', value: String(d.level || '1'),
         options: [{ value: '1', label: '★ 低' }, { value: '2', label: '★★ 中' }, { value: '3', label: '★★★ 高' }], row: 5 },
-      { name: 'note', label: '备注 / 步骤', type: 'textarea', value: d.note || '' }
+      { name: 'note', label: '备注', type: 'textarea', value: d.note || '', placeholder: '补充说明，如注意事项、资源链接等' }
     ];
+  }
+
+  // ---- SOP：结构化操作流程（纯手工步骤清单）----
+  function sopStepRow(i, val) {
+    return '<div class="ew-sop-row">' +
+      '<span class="ew-sop-idx">' + (i + 1) + '</span>' +
+      '<input class="input" data-sop placeholder="第 ' + (i + 1) + ' 步做什么…" value="' + ui.escapeAttr(val || '') + '">' +
+      '<button type="button" class="ew-sop-btn" data-mv="up" title="上移">↑</button>' +
+      '<button type="button" class="ew-sop-btn" data-mv="down" title="下移">↓</button>' +
+      '<button type="button" class="ew-sop-btn del" title="删除该步">✕</button>' +
+    '</div>';
+  }
+  function sopEditorHTML(d) {
+    d = d || {};
+    const steps = Array.isArray(d.sop) ? d.sop.map(s => String(s).trim()).filter(Boolean) : [];
+    const rows = steps.length ? steps.map((s, i) => sopStepRow(i, s)).join('') : sopStepRow(0, '');
+    return '<div class="ew-sop-ed">' +
+      '<div class="ew-sop-head">SOP · 操作流程 <span class="muted">把「怎么做」一步步写清楚</span></div>' +
+      '<div class="ew-sop-list">' + rows + '</div>' +
+      '<button type="button" class="btn ghost sm" id="ew-sop-add">＋ 添加步骤</button>' +
+      '<div class="hint muted">回车快速新增；用 ↑↓ 调整先后、✕ 删除。保存后空步骤会自动忽略。</div>' +
+    '</div>';
+  }
+  function initSopEditor(dialog) {
+    const list = dialog.querySelector('#ew-sop-list');
+    const addBtn = dialog.querySelector('#ew-sop-add');
+    if (!list || !addBtn) return;
+    function renumber() {
+      Array.from(list.querySelectorAll('.ew-sop-row')).forEach((r, i) => {
+        const idx = r.querySelector('.ew-sop-idx');
+        const inp = r.querySelector('input[data-sop]');
+        if (idx) idx.textContent = i + 1;
+        if (inp) inp.placeholder = '第 ' + (i + 1) + ' 步做什么…';
+      });
+    }
+    function addRow(val) {
+      list.insertAdjacentHTML('beforeend', sopStepRow(list.children.length, val || ''));
+      renumber();
+      const inp = list.lastElementChild.querySelector('input');
+      if (inp) inp.focus();
+    }
+    addBtn.onclick = () => addRow('');
+    list.addEventListener('click', e => {
+      const row = e.target.closest('.ew-sop-row');
+      if (!row || !list.contains(row)) return;
+      const btn = e.target.closest('.ew-sop-btn');
+      if (!btn) return;
+      if (btn.classList.contains('del')) { row.remove(); renumber(); }
+      else if (btn.dataset.mv === 'up') { const p = row.previousElementSibling; if (p) { list.insertBefore(row, p); renumber(); } }
+      else if (btn.dataset.mv === 'down') { const n = row.nextElementSibling; if (n) { list.insertBefore(n, row); renumber(); } }
+    });
+    list.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.matches('input[data-sop]')) { e.preventDefault(); addRow(''); }
+    });
+  }
+  function readSop(dialog) {
+    return Array.from(dialog.querySelectorAll('.ew-sop-row input[data-sop]')).map(i => i.value.trim()).filter(Boolean);
+  }
+  function sopSnippet(d) {
+    if (!Array.isArray(d.sop) || !d.sop.length) return '';
+    const steps = d.sop.map(s => String(s).trim()).filter(Boolean);
+    return steps.map((s, i) => (i + 1) + '. ' + s).slice(0, 2).join('　');
   }
 
   async function render(root) {
@@ -97,6 +159,7 @@
               ${d.payback ? `<span class="badge">回本 ${fmt(d.payback)}${ui.escapeHtml(d.paybackUnit || '月')}</span>` : ''}
             </div>` : ''}
             ${d.note ? `<div class="ew-note muted">${ui.escapeHtml(d.note)}</div>` : ''}
+            ${d.sop && d.sop.length ? `<div class="ew-flow" title="${ui.escapeAttr(d.sop.join(' → '))}">📋 ${d.sop.length} 步：${ui.escapeHtml(sopSnippet(d))}</div>` : ''}
           </div>
           <div class="row-actions">
             <button class="icon-btn edit" title="编辑">${ui.icon('pencil', 16)}</button>
@@ -139,7 +202,7 @@
     function openForm(d) {
       const m = ui.openModal({
         title: d ? '编辑门路' : '新建门路',
-        html: ui.form(formFields(d)),
+        html: ui.form(formFields(d)) + sopEditorHTML(d),
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -156,11 +219,14 @@
             obj.status = m.dialog.querySelector('#f-status').value;
             obj.level = parseInt(m.dialog.querySelector('#f-level').value, 10) || 1;
             obj.note = m.dialog.querySelector('#f-note').value.trim();
+            const steps = readSop(m.dialog);
+            if (steps.length) obj.sop = steps; else delete obj.sop;
             await store.put('earnways', obj); close(); await refresh();
           } }
         ]
       });
       ui.bindFormValidation(m.dialog);
+      initSopEditor(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-name').focus(), 50);
     }
 
@@ -190,7 +256,9 @@
             ${d.cat ? `<span class="badge">${ui.escapeHtml(d.cat)}</span>` : ''}
           </div>
           <div class="ew-kv-grid">${kv}</div>
-          ${d.note ? `<div class="ew-note-detail"><div class="k">备注 / 步骤</div><div class="nt">${ui.escapeHtml(d.note)}</div></div>` : ''}
+          ${d.sop && d.sop.length ? `<div class="ew-sop-view"><div class="k">SOP · 操作流程（${d.sop.length} 步）</div>
+            <ol class="ew-flow-list">${d.sop.map((s, i) => '<li><b>' + (i + 1) + '</b><span>' + ui.escapeHtml(s) + '</span></li>').join('')}</ol></div>` : ''}
+          ${d.note ? `<div class="ew-note-detail"><div class="k">备注</div><div class="nt">${ui.escapeHtml(d.note)}</div></div>` : ''}
         </div>`,
         actions: [
           { label: '取消' },
