@@ -47,7 +47,7 @@
     const rows = steps.length ? steps.map((s, i) => sopStepRow(i, s)).join('') : sopStepRow(0, '');
     return '<div class="ew-sop-ed">' +
       '<div class="ew-sop-head">SOP · 操作流程 <span class="muted">把「怎么做」一步步写清楚</span></div>' +
-      '<div class="ew-sop-list">' + rows + '</div>' +
+      '<div class="ew-sop-list" id="ew-sop-list">' + rows + '</div>' +
       '<button type="button" class="btn ghost sm" id="ew-sop-add">＋ 添加步骤</button>' +
       '<div class="hint muted">回车快速新增；用 ↑↓ 调整先后、✕ 删除。保存后空步骤会自动忽略。</div>' +
     '</div>';
