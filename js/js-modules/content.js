@@ -125,6 +125,7 @@
         const user = '标题：' + title + '\n类型：' + (KIND[kind] || '') + (platform ? '\n平台：' + platform : '') + (note ? '\n备注：' + note : '');
         WB.ai.assistModal({
           title: 'AI 生成草稿', system: DRAFT_SYSTEM, user,
+          src: 'content',
           adoptLabel: '采用为草稿',
           onAdopt: (txt) => { ta.value = txt; ui.toast('已生成草稿'); }
         });
@@ -132,18 +133,19 @@
       m.dialog.querySelector('#ai-multi').onclick = () => {
         const src = ta.value.trim();
         if (!src) { ui.toast('请先写正文或生成草稿', 'warn'); return; }
-        WB.ai.assistModal({ title: '多平台改写', system: MULTI_SYSTEM, user: '请改写以下内容：\n\n' + src });
+        WB.ai.assistModal({ title: '多平台改写', system: MULTI_SYSTEM, src: 'content', user: '请改写以下内容：\n\n' + src });
       };
       m.dialog.querySelector('#ai-diagnose').onclick = () => {
         const src = ta.value.trim();
         if (!src) { ui.toast('请先写正文或生成草稿', 'warn'); return; }
-        WB.ai.assistModal({ title: '爆款诊断', system: DIAGNOSE_SYSTEM, user: '请诊断以下内容：\n\n' + src });
+        WB.ai.assistModal({ title: '爆款诊断', system: DIAGNOSE_SYSTEM, src: 'content', user: '请诊断以下内容：\n\n' + src });
       };
       m.dialog.querySelector('#ai-humanize').onclick = () => {
         const src = ta.value.trim();
         if (!src) { ui.toast('请先写正文或生成草稿', 'warn'); return; }
         WB.ai.assistModal({
           title: '去 AI 味', system: HUMANIZE_SYSTEM, user: '请润色以下内容：\n\n' + src,
+          src: 'content',
           adoptLabel: '替换为润色版',
           onAdopt: (txt) => { ta.value = txt; ui.toast('已去 AI 味'); }
         });
