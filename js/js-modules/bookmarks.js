@@ -82,7 +82,7 @@
         const btn = m.dialog.querySelector('#ai-bm');
         const old = btn.textContent; btn.disabled = true; btn.textContent = '生成中…';
         try {
-          const parsed = WB.ai.parseJSON(await WB.ai.ask(BM_AI_SYSTEM, 'URL：' + (url || '（无）') + '\n标题：' + (title || '（无）')));
+          const parsed = WB.ai.parseJSON(await WB.ai.ask(BM_AI_SYSTEM, 'URL：' + (url || '（无）') + '\n标题：' + (title || '（无）'), { save: false }));
           if (parsed) {
             const tags = Array.isArray(parsed.tags) ? parsed.tags.filter(Boolean) : [];
             m.dialog.querySelector('#f-note').value = (parsed.summary || '') + (tags.length ? '  #' + tags.join(' #') : '');
