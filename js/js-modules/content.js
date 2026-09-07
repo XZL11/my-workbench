@@ -27,10 +27,7 @@
           <label style="flex:1">平台<input id="f-platform" class="input" value="${ui.escapeHtml(c.platform || '')}" placeholder="如：抖音 / 公众号"></label>
         </div>
         <label>备注<input id="f-note" class="input" value="${ui.escapeHtml(c.note || '')}" placeholder="可选"></label>
-        <div class="editor">
-          <textarea id="f-body" class="input" rows="10" placeholder="正文 / 脚本内容，支持 Markdown">${ui.escapeHtml(c.body || '')}</textarea>
-          <div id="f-preview" class="preview md"></div>
-        </div>
+        <textarea id="f-body" class="input" rows="10" placeholder="正文 / 脚本内容">${ui.escapeHtml(c.body || '')}</textarea>
       </div>
       <div class="ai-bar">
         <button type="button" class="btn ghost sm" id="ai-draft">✨ AI 生成草稿</button>
@@ -117,9 +114,7 @@
           await store.put('content', obj); close(); await refresh();
         } }]
       });
-      const ta = m.dialog.querySelector('#f-body'), pv = m.dialog.querySelector('#f-preview');
-      const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
-      ta.addEventListener('input', upd); upd();
+      const ta = m.dialog.querySelector('#f-body');
       ui.bindFormValidation(m.dialog);
       m.dialog.querySelector('#ai-draft').onclick = () => {
         const title = m.dialog.querySelector('#f-title').value.trim();
@@ -131,7 +126,7 @@
         WB.ai.assistModal({
           title: 'AI 生成草稿', system: DRAFT_SYSTEM, user,
           adoptLabel: '采用为草稿',
-          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已生成草稿'); }
+          onAdopt: (txt) => { ta.value = txt; ui.toast('已生成草稿'); }
         });
       };
       m.dialog.querySelector('#ai-multi').onclick = () => {
@@ -150,7 +145,7 @@
         WB.ai.assistModal({
           title: '去 AI 味', system: HUMANIZE_SYSTEM, user: '请润色以下内容：\n\n' + src,
           adoptLabel: '替换为润色版',
-          onAdopt: (txt) => { ta.value = txt; upd(); ui.toast('已去 AI 味'); }
+          onAdopt: (txt) => { ta.value = txt; ui.toast('已去 AI 味'); }
         });
       };
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
