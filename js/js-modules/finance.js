@@ -207,7 +207,7 @@
       btn.disabled = true; btn.textContent = '生成中…';
       try {
         const ctx = buildFinanceInsightContext();
-        const text = await WB.ai.ask(FIN_INSIGHT_SYSTEM, ctx);
+        const text = await WB.ai.ask(FIN_INSIGHT_SYSTEM, ctx, { src: 'finance' });
         body.className = 'ai-brief-body';
         body.innerHTML = ui.mdLite(text);
         btn.textContent = '重新生成';
@@ -251,7 +251,7 @@
         const goBtn = m.dialog.querySelector('#ai-parse-go');
         goBtn.disabled = true; goBtn.textContent = '解析中…';
         try {
-          const parsed = WB.ai.parseJSON(await WB.ai.ask(FIN_PARSE_SYSTEM, raw));
+          const parsed = WB.ai.parseJSON(await WB.ai.ask(FIN_PARSE_SYSTEM, raw, { save: false }));
           if (!parsed || !(parsed.amount > 0)) { ui.toast('没能解析出金额，请检查描述', 'warn'); }
           else {
             m.dialog.querySelector('#f-amount').value = parsed.amount;
