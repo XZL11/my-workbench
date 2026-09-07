@@ -24,7 +24,7 @@
         <label style="flex:1">优先级<select id="f-priority" class="input">
           <option value="1" ${t.priority == 1 ? 'selected' : ''}>高</option>
           <option value="2" ${t.priority == 2 ? 'selected' : ''}>中</option>
-          <option value="3" ${t.priority == 3 ? 'selected' : ''}>低</option></select></label>
+          <option value="3" ${t.priority == 3 || t.priority == null ? 'selected' : ''}>低</option></select></label>
         <label style="flex:1">截止日期<input id="f-due" class="input" type="date" value="${dueVal}"></label>
       </div>
       <label>标签（逗号分隔）<input id="f-tags" class="input" value="${ui.escapeHtml((t.tags || []).join(', '))}" placeholder="工作, 紧急"></label>
