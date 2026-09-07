@@ -362,7 +362,7 @@
         + '请输出JSON：{"stance":"偏多|中性|偏空","score":1-5的整数,"summary":"80字内的当日研判",'
         + '"reasons":["理由1","理由2","理由3"],"watch":["关注点1","关注点2"],"risk":"一条风险提示"}';
       try {
-        const txt = await WB.ai.ask(sys, user);
+        const txt = await WB.ai.ask(sys, user, { src: 'leverage' });
         const p = WB.ai.parseJSON(txt);
         if (p) {
           d.stance = (['偏多', '中性', '偏空'].indexOf(p.stance) >= 0) ? p.stance : '中性';
