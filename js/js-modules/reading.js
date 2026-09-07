@@ -87,7 +87,7 @@
     function openForm(r) {
       const m = ui.openModal({
         title: r ? '编辑' : '登记阅读',
-        html: ui.form(formFields(r)) + '<div class="editor"><textarea id="f-note" class="input" rows="6" placeholder="笔记 / 读后感，支持 Markdown">' + ui.escapeHtml((r && r.note) || '') + '</textarea><div id="f-preview" class="preview md"></div></div>',
+        html: ui.form(formFields(r)) + '<textarea id="f-note" class="input" rows="8" style="margin-top:8px" placeholder="笔记 / 读后感">' + ui.escapeHtml((r && r.note) || '') + '</textarea>',
         actions: [
           { label: '取消' },
           { label: '保存', primary: true, onClick: async (close) => {
@@ -108,9 +108,7 @@
           } }
         ]
       });
-      const ta = m.dialog.querySelector('#f-note'), pv = m.dialog.querySelector('#f-preview');
-      const upd = () => { pv.innerHTML = ui.mdLite(ta.value); };
-      ta.addEventListener('input', upd); upd();
+      const ta = m.dialog.querySelector('#f-note');
       ui.bindFormValidation(m.dialog);
       setTimeout(() => m.dialog.querySelector('#f-title').focus(), 50);
     }
@@ -133,7 +131,7 @@
               <span class="progress-num">${prog}%</span>
             </div>
             ${(r.startDate || r.finishDate) ? '<div class="muted" style="font-size:13px">' + (r.startDate ? '开始 ' + ui.escapeHtml(r.startDate) : '') + (r.startDate && r.finishDate ? ' · ' : '') + (r.finishDate ? '读完 ' + ui.escapeHtml(r.finishDate) : '') + '</div>' : ''}
-            ${r.note ? '<div class="reading-view-note md">' + ui.mdLite(r.note) + '</div>' : ''}
+            ${r.note ? '<div class="reading-view-note">' + ui.escapeHtml(r.note) + '</div>' : ''}
           </div>`,
         actions: [
           { label: '关闭' },
