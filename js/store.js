@@ -4,7 +4,7 @@
   WB.modules = WB.modules || []; // 功能模块注册表（模块文件先于 app.js 加载）
   const DB_NAME = 'workbench-db';
   const DB_VERSION = 6; // v6：新增 levai（杠杆测算的 AI 日报缓存，仅本地、不参与云同步）
-  const STORES = ['tasks', 'calendar', 'notes', 'diary', 'habits', 'habitlogs', 'bookmarks', 'finance', 'content', 'planning', 'reading', 'earnways', 'leverage', 'levai', 'meta'];
+  const STORES = ['tasks', 'calendar', 'notes', 'habits', 'habitlogs', 'bookmarks', 'finance', 'content', 'planning', 'reading', 'earnways', 'leverage', 'levai', 'meta'];
   const SYNC_STORES = STORES.filter(s => s !== 'meta' && s !== 'levai');
   let _db = null;
   let _suppressSync = false; // 同步自身的写操作不触发再次同步，避免死循环
