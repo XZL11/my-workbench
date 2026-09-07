@@ -164,6 +164,7 @@
           title: 'AI 拆解：' + title,
           system: '你是一个任务拆解助手。把用户给出的一项待办，拆解成具体、可独立执行的小步骤。用中文，每条一行，3-6 条，务实、可操作，避免空泛。',
           user: '待办：' + title + (note ? ('\n背景：' + note) : '') + '\n\n请拆解为执行步骤（每行一条）：',
+          src: 'calendar',
           adoptLabel: '采纳为子任务',
           onAdopt: (txt) => {
             const lines = WB.ai.parseLines(txt);
