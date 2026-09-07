@@ -234,11 +234,13 @@
     // 选题推荐面板为异步拉取，渲染后填充（不阻塞首页其余面板）
     fillRecommendPanel();
 
-    // ===== 版头今日语录：只从「带标签的笔记」中取，AI 提炼励志句 =====
+    // ===== 版头今日语录：只从「类型=笔记」的带标签文章中取，AI 提炼励志句 =====
     async function pickNote() {
       let all = [];
       try { all = (await store.getAll('notes')).filter(i => !i._deleted); } catch (e) { all = []; }
-      const pool = all.filter(n => Array.isArray(n.tags) && n.tags.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const pool = all
+        .filter(n => (n.type || 'note') === 'note' && Array.isArray(n.tags) && n.tags.length)
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       if (!pool.length) return null;
       const len = pool.length;
       const offset = Number(await store.getMeta('home_quote_off', 0)) || 0;
@@ -250,7 +252,8 @@
       const sys = '你是文学金句提炼助手。从用户笔记内容中提炼一句简短、有力量、适合展示在首页的励志/共鸣语录（30-60字）。硬性要求：正向鼓励但不空喊口号；提炼自原文思想，不编造数据与事实；不要引用别人名言原句；不要加书名号、引号、冒号或署名。直接输出那句话本身。';
       const body = String(n.body || '').replace(/\s+/g, ' ').slice(0, 1500);
       const user = '笔记标题：' + (n.title || '无标题') + '\n笔记标签：' + (n.tags || []).join('、') + '\n笔记内容：' + (body || '（空）') + '\n\n请输出一句话。';
-      const text = await WB.ai.ask(sys, user, { src: 'notes_quote' });
+      // 以固定 key（nq:{笔记id}）写入 AI 记录库 → 同一篇只留一条、随重生成覆盖，不重复堆积
+      const text = await WB.ai.ask(sys, user, { src: 'notes_quote', key: 'nq:' + n.id });
       return (text || '').trim().replace(/^[「“"'']+|[」”"'']+$/g, '');
     }
     async function fillQuote() {
@@ -258,7 +261,7 @@
       if (!holder) return;
       const note = await pickNote();
       if (!note) {
-        holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">给自己的笔记加上「标签」，这里会自动生成你的专属励志语录。</div>';
+        holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">把文章类型设为「笔记」并打上标签后，这里会自动生成你的专属励志语录。</div>';
         return;
       }
       const paintNote = () => {
