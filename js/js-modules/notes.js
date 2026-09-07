@@ -11,7 +11,7 @@
   async function generateAndSaveSummary(id, body) {
     let text;
     try {
-      text = await WB.ai.ask(SUMMARY_SYSTEM, '请摘要以下内容：\n\n' + body);
+      text = await WB.ai.ask(SUMMARY_SYSTEM, '请摘要以下内容：\n\n' + body, { src: 'notes_summary' });
     } catch (e) {
       ui.toast('AI 摘要生成失败：' + (e && e.message ? e.message : e), 'warn');
       return;
@@ -26,7 +26,7 @@
   // 标题为空时，AI 自动生成并保存
   async function genTitle(id, body) {
     let text;
-    try { text = await WB.ai.ask(TITLE_SYSTEM, body); }
+    try { text = await WB.ai.ask(TITLE_SYSTEM, body, { save: false }); }
     catch (e) { ui.toast('AI 标题生成失败：' + (e && e.message ? e.message : e), 'warn'); return; }
     text = (text || '').trim().replace(/^["'「『]|["'」』]$/g, '').slice(0, 40) || '未命名笔记';
     const rec = await store.get('notes', id);
@@ -38,7 +38,7 @@
   // 标签为空时，AI 自动生成并保存
   async function genTags(id, body, title) {
     let text;
-    try { text = await WB.ai.ask(TAGS_SYSTEM, '标题：' + (title || '') + '\n内容：' + body); }
+    try { text = await WB.ai.ask(TAGS_SYSTEM, '标题：' + (title || '') + '\n内容：' + body, { save: false }); }
     catch (e) { ui.toast('AI 标签生成失败：' + (e && e.message ? e.message : e), 'warn'); return; }
     const tags = (text || '').split(/[,，\s]+/).map(s => s.replace(/^[#\-*、•·]+/, '').trim()).filter(Boolean).slice(0, 6);
     const rec = await store.get('notes', id);
@@ -177,6 +177,7 @@
         WB.ai.assistModal({
           title: 'AI 改写口播稿',
           system: '你是一个自媒体口播稿改写助手。把用户给出的内容改写成适合念出来的口播稿：口语化、有开头钩子和结尾引导，分段清晰，中文。',
+          src: 'notes',
           user: '请把以下内容改写成口播稿：\n\n' + src,
           adoptLabel: '采用口播稿',
           onAdopt: (txt) => {
