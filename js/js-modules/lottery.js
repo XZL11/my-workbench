@@ -147,7 +147,7 @@
   // 生成单场分析并缓存（表 jcai，id=jcm:{sport}:{matchId}）
   async function genMatchAI(m) {
     if (!aiOK()) return null;
-    const txt = await WB.ai.ask(SYS_MATCH, buildBrief(m) + '\n\n请输出 JSON。');
+    const txt = await WB.ai.ask(SYS_MATCH, buildBrief(m) + '\n\n请输出 JSON。', { src: 'lottery' });
     const p = WB.ai.parseJSON(txt);
     const rec = { id: 'jcm:' + m.sport + ':' + m.matchId, busDate: m.busDate, ai: p, updatedAt: Date.now() };
     try { await store.put('jcai', rec); } catch (e) { /* 缓存失败不阻塞展示 */ }
@@ -158,7 +158,7 @@
     if (!aiOK()) return null;
     const list = rows.filter(sellOk).slice(0, 30);
     const body = '今日共' + list.length + '场' + sport.name + '：\n' + list.map((m, i) => (i + 1) + '. ' + buildBrief(m)).join('\n') + '\n\n请输出 JSON。';
-    const txt = await WB.ai.ask(SYS_REC, body);
+    const txt = await WB.ai.ask(SYS_REC, body, { src: 'lottery' });
     const p = WB.ai.parseJSON(txt);
     const rec = { id: 'jcr:' + sport.id + ':' + todayStamp(), sport: sport.id, list: list.map(m => m.matchId), ai: p, updatedAt: Date.now() };
     try { await store.put('jcai', rec); } catch (e) {}
