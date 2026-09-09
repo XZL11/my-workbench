@@ -234,74 +234,81 @@
     // 选题推荐面板为异步拉取，渲染后填充（不阻塞首页其余面板）
     fillRecommendPanel();
 
-    // ===== 版头今日语录：只从「类型=笔记」的带标签文章中取，AI 提炼励志句 =====
-    async function pickNote() {
+    // ===== 版头今日语录：只从「类型=笔记」的带标签文章中取，AI 提炼励志句；每分钟自动切换一篇 =====
+    async function loadQuotePool() {
       let all = [];
       try { all = (await store.getAll('notes')).filter(i => !i._deleted); } catch (e) { all = []; }
-      const pool = all
+      return all
         .filter(n => (n.type || 'note') === 'note' && Array.isArray(n.tags) && n.tags.length)
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+    async function pickNoteByPtr(pool) {
       if (!pool.length) return null;
       const len = pool.length;
-      const offset = Number(await store.getMeta('home_quote_off', 0)) || 0;
-      // 每天的起始索引随日期轮转，保证每天自动换一篇；「换一句」在偏移上 +1
-      const base = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 1)) / 86400000);
-      return pool[(((base + offset) % len) + len) % len];
+      const ptr = Number(await store.getMeta('home_quote_ptr', 0)) || 0;
+      return pool[((ptr % len) + len) % len];
     }
     async function quoteFor(n) {
       const sys = '你是文学金句提炼助手。从用户笔记内容中提炼一句简短、有力量、适合展示在首页的励志/共鸣语录（30-60字）。硬性要求：正向鼓励但不空喊口号；提炼自原文思想，不编造数据与事实；不要引用别人名言原句；不要加书名号、引号、冒号或署名。直接输出那句话本身。';
       const body = String(n.body || '').replace(/\s+/g, ' ').slice(0, 1500);
       const user = '笔记标题：' + (n.title || '无标题') + '\n笔记标签：' + (n.tags || []).join('、') + '\n笔记内容：' + (body || '（空）') + '\n\n请输出一句话。';
-      // 以固定 key（nq:{笔记id}）写入 AI 记录库 → 同一篇只留一条、随重生成覆盖，不重复堆积
+      // 以固定 key（nq:笔记id）写入 AI 记录库 → 同一篇只留一条、随重生成覆盖，不重复堆积
       const text = await WB.ai.ask(sys, user, { src: 'notes_quote', key: 'nq:' + n.id });
       return (text || '').trim().replace(/^[「“"'']+|[」”"'']+$/g, '');
     }
-    async function fillQuote() {
+    function quoteTip(text) {
+      return '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">' + text + '</div>';
+    }
+    function quoteBodyHTML(note) {
+      return '<span class="hq-mark">💬</span>' +
+        '<div class="hq-main">' +
+          '<div class="hq-quote">“' + ui.escapeHtml(note.quote) + '”</div>' +
+          '<div class="hq-src muted">—— 摘自已打标签的笔记《' + ui.escapeHtml(note.title || '无标题') + '》</div>' +
+        '</div>';
+    }
+    async function showQuote() {
       const holder = root.querySelector('#quote-holder');
-      if (!holder) return;
-      const note = await pickNote();
-      if (!note) {
-        holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">把文章类型设为「笔记」并打上标签后，这里会自动生成你的专属励志语录。</div>';
-        return;
-      }
-      const paintNote = () => {
-        if (!note.quote) {
-          holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">AI 正在从《' + ui.escapeHtml(note.title || '无标题') + '》里提炼今日语录…</div>';
-          return;
-        }
-        holder.innerHTML =
-          '<span class="hq-mark">💬</span>' +
-          '<div class="hq-main">' +
-            '<div class="hq-quote">“' + ui.escapeHtml(note.quote) + '”</div>' +
-            '<div class="hq-src muted">—— 摘自已打标签的笔记《' + ui.escapeHtml(note.title || '无标题') + '》</div>' +
-          '</div>' +
-          '<button class="btn ghost sm" id="quote-next" title="换一句">↻ 换一句</button>';
-        holder.querySelector('#quote-next').onclick = async () => {
-          const off = (Number(await store.getMeta('home_quote_off', 0)) || 0) + 1;
-          await store.setMeta('home_quote_off', off);
-          await fillQuote();
-        };
-      };
-      paintNote();
-      if (!note.quote) {
+      if (!holder || root._qbusy) return;
+      root._qbusy = true;
+      try {
+        const pool = await loadQuotePool();
+        const note = await pickNoteByPtr(pool);
+        if (!note) { holder.innerHTML = quoteTip('把文章类型设为「笔记」并打上标签后，这里会自动生成你的专属励志语录。'); return; }
+        // 同篇已在展示则不重复渲染/生成
+        if (holder.dataset.cur === note.id && holder.querySelector('.hq-quote')) return;
+        if (note.quote) { holder.dataset.cur = note.id; holder.innerHTML = quoteBodyHTML(note); return; }
         if (!(WB.ai && WB.ai.ask) || !(await WB.ai.isConfigured().catch(() => false))) {
-          holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">开启 AI（设置 → AI 助手）后，这里会从你带标签的笔记里提炼每日语录。</div>';
+          holder.innerHTML = quoteTip('开启 AI（设置 → AI 助手）后，这里会从你带标签的笔记里提炼语录。');
           return;
         }
+        holder.innerHTML = quoteTip('AI 正在从《' + ui.escapeHtml(note.title || '无标题') + '》里提炼语录…');
         try {
           const q = await quoteFor(note);
           if (q) { note.quote = q; try { await store.put('notes', note); } catch (e) {} }
         } catch (e) {
-          holder.innerHTML = '<span class="hq-mark">💬</span><div class="hq-main hq-tip muted">语录生成失败：' + ui.escapeHtml(e && e.message ? e.message : e) + '</div>' +
-            '<button class="btn ghost sm" id="quote-next">↻ 重试</button>';
-          const rb = holder.querySelector('#quote-next');
-          if (rb) rb.onclick = () => fillQuote();
+          holder.innerHTML = quoteTip('这篇语录生成失败（' + ui.escapeHtml(e && e.message ? e.message : '网络/额度问题') + '），一分钟后自动换一篇。');
           return;
         }
-        paintNote();
-      }
+        holder.dataset.cur = note.id;
+        holder.innerHTML = quoteBodyHTML(note);
+      } finally { root._qbusy = false; }
     }
-    fillQuote();
+    async function quoteStep() {
+      const pool = await loadQuotePool();
+      if (!pool.length) return;
+      const ptr = (Number(await store.getMeta('home_quote_ptr', 0)) || 0) + 1;
+      await store.setMeta('home_quote_ptr', ptr);
+      showQuote();
+    }
+    function startQuoteTimer() {
+      if (root._qtimer) { clearInterval(root._qtimer); root._qtimer = null; }
+      root._qtimer = setInterval(() => {
+        if (!document.body.contains(root)) { clearInterval(root._qtimer); root._qtimer = null; return; } // 页面已切走则自动停止
+        quoteStep();
+      }, 60000);
+    }
+    showQuote();
+    startQuoteTimer();
 
     // 待办交互（含子任务）
     const tl = root.querySelector('#todolist');
