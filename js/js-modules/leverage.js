@@ -204,10 +204,10 @@
   function buyFees(rec, amt) { const f = rates(rec); return Math.max(amt * f.comm, f.minComm) + amt * f.transfer; }
   function sellFees(rec, amt) { const f = rates(rec); return Math.max(amt * f.comm, f.minComm) + amt * f.stamp + amt * f.transfer; }
 
-  // 解「卖出净得 = 成本」的卖出价（含最低佣金的非线性修正）
-  function solvePrice(rec, cost) {
+  // 解「卖出净得 = 成本」的卖出价（含最低佣金的非线性修正）；qty 缺省用 rec.quantity（兼容旧调用）
+  function solvePrice(rec, cost, qty) {
     const f = rates(rec);
-    const Q = Math.max(1, num(rec.quantity, 1));
+    const Q = Math.max(1, qty != null ? qty : num(rec.quantity, 1));
     const kSell = f.comm + f.stamp + f.transfer;
     let S = cost / (Q * (1 - kSell));
     for (let i = 0; i < 3; i++) {
@@ -217,32 +217,66 @@
     return S;
   }
 
-  function calc(rec, curPrice) {
-    const Q = num(rec.quantity, 0);
-    const buy = num(rec.buyPrice) * Q;            // 买入总价（用户填入的买入价已含买入佣金/过户费，不再重复计）
-    const cBuy = 0;                              // 买入价已含买入费用
-    const D = daysBetween(rec.startDate);
-    const st = loanState(rec, D);
-    const prepayFee = st.remaining * rates(rec).prepay;
-    const own = Math.max(0, buy - st.P);         // 自有本金 = 总投入 − 贷款本金（其余来自借款）
+  // 单笔加仓批次 → 归一化贷款记录（百分比利率/设置类可沿用首笔；金额类不沿用，防止误把首笔总利息算到新批）
+  function addLoanRec(add, rec) {
+    const blank = v => (v == null || v === '');
+    return {
+      principal: num(add.principal),
+      termMonths: num(add.termMonths, rec.termMonths || 3),
+      method: add.method || rec.method || 'daily',
+      // 金额类：只用批次自己填的；空 → 视为无（不会误继承首笔的金额）
+      termInterest: blank(add.termInterest) ? null : num(add.termInterest),
+      periodInterests: blank(add.periodInterests) ? null : add.periodInterests,
+      monthlyPayment: blank(add.monthlyPayment) ? null : num(add.monthlyPayment),
+      // 利率（百分比）：批次未填则沿用首笔
+      dailyRate: blank(add.dailyRate) ? rec.dailyRate : add.dailyRate,
+      annualRate: blank(add.annualRate) ? rec.annualRate : add.annualRate,
+      dayBasis: blank(add.dayBasis) ? num(rec.dayBasis, 360) : num(add.dayBasis),
+      startDate: add.date || rec.startDate,
+      repayDay: blank(add.repayDay) ? num(rec.repayDay, 25) : num(add.repayDay)
+    };
+  }
+  // 批次贷款状态；纯自有加仓（贷款=0）返回 null，不产生利息
+  function addState(add, rec) {
+    const ar = addLoanRec(add, rec);
+    if (!ar.principal) return null;
+    return loanState(ar, daysBetween(ar.startDate));
+  }
 
-    // 覆盖总利息：优先用平台报价的「期限总利息」，没填才退回公式推算的整期利息
-    const totalForCover = (st.termInterest != null && st.termInterest > 0) ? st.termInterest : st.total;
-    // 成本基准 = 买入总价（贷款+自有）+ 贷款利息；三者（累计息/保本/覆息）都会同时保住贷款与自有本金
-    const costNow = buy + st.accrued + prepayFee;       // 立刻还清：含截至今日利息 + 提前还款违约金
-    const costAccrued = buy + st.accrued;              // 覆盖累计日利息：截至今日已产生的利息（不含提前还款违约金）
-    const costTotal = buy + totalForCover;             // 持有到期：吃满整期全部利息
-    const breakeven = solvePrice(rec, costNow);
-    const coverAccrued = solvePrice(rec, costAccrued);
-    const coverAll = solvePrice(rec, costTotal);
+  // 聚合计算：持仓合并（总股数/总买入额），各批贷款独立计息后累计。
+  // 关键原则：原贷款利息不因加仓被清除/重算，始终在 loanState(rec, D) 里累计；
+  //           加仓贷款各自的利息在其批次状态里累计，最终汇总。
+  function calc(rec, curPrice) {
+    const adds = Array.isArray(rec.adds) ? rec.adds : [];
+    const baseQ = num(rec.quantity, 0);
+    const Q = adds.reduce((s, a) => s + num(a.qty), baseQ);                    // 总股数
+    const buy = adds.reduce((s, a) => s + num(a.price) * num(a.qty), num(rec.buyPrice) * baseQ); // 总买入额（各批买入价均已含费）
+    const D = daysBetween(rec.startDate);
+    const st = loanState(rec, D);                                              // 首笔贷款状态（原利息持续累计）
+    const ast = adds.map(a => addState(a, rec));                               // 各加仓批次贷款状态（无贷款为 null）
+
+    const P = ast.reduce((s, x) => s + (x ? x.P : 0), st.P);                   // 贷款本金合计
+    const own = Math.max(0, buy - P);                                          // 自有本金 = 总投入 − 贷款合计
+    const accrued = ast.reduce((s, x) => s + (x ? x.accrued : 0), st.accrued); // 累计已计息合计（原贷款 + 各加仓贷款）
+    const remaining = ast.reduce((s, x) => s + (x ? x.remaining : 0), st.remaining); // 剩余本金合计
+    const totalForCover = ast.reduce((s, x) => s + (x ? ((x.termInterest != null && x.termInterest > 0) ? x.termInterest : x.total) : 0),
+      (st.termInterest != null && st.termInterest > 0) ? st.termInterest : st.total); // 整期总利息合计
+    const daily = ast.reduce((s, x) => s + (x ? x.daily : 0), st.daily);       // 每日新增利息合计
+    const prepayFee = remaining * rates(rec).prepay;                           // 违约金（统一按首笔费率×剩余本金合计）
+
+    const costNow = buy + accrued + prepayFee;      // 立刻全部还清：含截至今日利息 + 违约金
+    const costAccrued = buy + accrued;              // 覆盖累计利息（不含违约金）
+    const costTotal = buy + totalForCover;          // 持有到期：吃满各批全部整期利息
+    const breakeven = solvePrice(rec, costNow, Q);
+    const coverAccrued = solvePrice(rec, costAccrued, Q);
+    const coverAll = solvePrice(rec, costTotal, Q);
 
     const market = curPrice ? curPrice * Q : 0;
     const netIfSell = curPrice ? market - sellFees(rec, market) : 0;
     const pnl = curPrice ? netIfSell - costNow : 0;
-    // 每多持有一天，保本价上浮多少（仅由贷款日息驱动）
-    const drift = st.daily / Math.max(1, Q) / (1 - (rates(rec).comm + rates(rec).stamp + rates(rec).transfer));
+    const drift = daily / Math.max(1, Q) / (1 - (rates(rec).comm + rates(rec).stamp + rates(rec).transfer));
 
-    return { Q, buy, cBuy, own, D, st, prepayFee, totalForCover, costNow, costAccrued, costTotal, breakeven, coverAccrued, coverAll, market, netIfSell, pnl, drift, curPrice };
+    return { Q, buy, cBuy: 0, own, D, st, ast, adds, P, accrued, remaining, daily, prepayFee, totalForCover, costNow, costAccrued, costTotal, breakeven, coverAccrued, coverAll, market, netIfSell, pnl, drift, curPrice };
   }
 
   /* ---------------- 实时行情（东方财富，已验证支持跨域） ---------------- */
@@ -559,8 +593,96 @@
     ui.bindFormValidation(m.dialog);
   }
 
+  /* ---------------- 加仓（向现有持仓追加一笔买入，资金可为贷款/存款/混合） ---------------- */
+  function openAddForm(rec, onSaved) {
+    const METHOD_OPTS = Object.keys(METHOD).map(k => ({ value: k, label: METHOD[k] }));
+    const html =
+      '<div class="form-sec">本批买入（第 ' + (((rec.adds || []).length) + 2) + ' 批，资金可全部贷款、全部存款或两者混合）</div>' +
+      ui.form([
+        { name: 'date', label: '加仓日期', type: 'date', value: todayISO(), required: true, flex: 1, row: 1 },
+        { name: 'qty', label: '买入数量(股)', type: 'number', value: '', required: true, min: 1, flex: 1, row: 1 },
+        { name: 'price', label: '买入价(元) · 已含买入费', type: 'number', value: '', required: true, min: 0, flex: 1, row: 1 },
+        { name: 'principal', label: '其中贷款金额(元) · 0=全用存款', type: 'number', value: 0, min: 0, flex: 1, row: 2 }
+      ]) +
+      '<div id="f-add-sum" class="hint muted"></div>' +
+      '<div id="f-add-loan">' +
+        '<div class="form-sec">本批贷款条款（利率可沿用首笔；金额类只认本批填写）</div>' +
+        ui.form([
+          { name: 'method', label: '还款方式', type: 'select', value: rec.method || 'daily', flex: 1, row: 1, options: METHOD_OPTS },
+          { name: 'termMonths', label: '借款期限(月)', type: 'number', value: num(rec.termMonths, 3), min: 1, flex: 1, row: 1 },
+          { name: 'termInterest', label: '本批期限总利息(元) · 平台显示', type: 'number', value: '', min: 0, flex: 1, row: 2 },
+          { name: 'periodInterests', label: '本批每期利息(元) · 逗号分隔', type: 'text', value: '', placeholder: '如 60,55,50；不填总利息时自动求和当总利息', flex: 1, row: 2 },
+          { name: 'dailyRate', label: '本批日利率 %(留空沿用首笔)', type: 'number', value: '', min: 0, step: 0.0001, flex: 1, row: 3 },
+          { name: 'annualRate', label: '本批年利率 %(留空沿用首笔)', type: 'number', value: '', min: 0, flex: 1, row: 3 }
+        ]) +
+        '<div class="hint muted">「期限总利息 / 每期利息 / 每期应还」这类<b>金额只按本批填的算</b>，不会沿用首笔（避免把首笔的总利息错算到新批）；日利率 / 年利率留空则沿用首笔贷款设置。</div>' +
+      '</div>';
+    const m = ui.openModal({
+      title: '加仓 · ' + (rec.stockName || rec.stockCode),
+      html: html,
+      actions: [{ label: '取消' }, {
+        label: '保存加仓', primary: true, onClick: async (close) => {
+          const g = id => m.dialog.querySelector('#f-' + id).value.trim();
+          const qty = Math.max(1, num(g('qty'), 0));
+          const price = num(g('price'));
+          if (!(qty > 0) || !(price > 0)) { ui.toast('请填买入数量和买入价', 'warn'); return; }
+          const obj = Object.assign({}, rec);
+          const add = {
+            id: store.uid(),
+            date: g('date') || todayISO(),
+            qty: qty,
+            price: price,
+            principal: Math.max(0, num(g('principal')))
+          };
+          if (add.principal > 0) {
+            add.method = g('method');
+            add.termMonths = Math.max(1, num(g('termMonths'), num(rec.termMonths, 3)));
+            add.termInterest = g('termInterest');
+            add.periodInterests = g('periodInterests').replace(/，/g, ',').trim();
+            add.dailyRate = g('dailyRate');
+            add.annualRate = g('annualRate');
+          }
+          obj.adds = (rec.adds || []).concat([add]);
+          obj.updatedAt = Date.now();
+          await store.put('leverage', obj);
+          close();
+          if (onSaved) onSaved(obj);
+        }
+      }]
+    });
+    // 本批小计 + 加仓后均价 实时预览
+    const sumEl = m.dialog.querySelector('#f-add-sum');
+    const loanBox = m.dialog.querySelector('#f-add-loan');
+    const upd = () => {
+      const qty = num(m.dialog.querySelector('#f-qty').value);
+      const price = num(m.dialog.querySelector('#f-price').value);
+      const loan = num(m.dialog.querySelector('#f-principal').value);
+      const sub = price * qty;
+      const ownPart = Math.max(0, sub - loan);
+      const baseQ = num(rec.quantity, 0);
+      const baseBuy = num(rec.buyPrice) * baseQ;
+      const Q2 = baseQ + qty;
+      const buy2 = baseBuy + sub;
+      const avg = Q2 > 0 ? buy2 / Q2 : 0;
+      sumEl.innerHTML = sub > 0
+        ? ('本批买入 <b>' + money(sub) + '</b> ＝ 贷款 <b>' + money(loan) + '</b> ＋ 自有 <b>' + money(ownPart) + '</b>' +
+           '　→　加仓后持仓 <b>' + Q2 + '</b> 股 · 新均价 <b>' + avg.toFixed(3) + '</b>' +
+           (loan > sub && sub > 0 ? '<br>⚠️ 本批贷款大于买入，差额为未投入现金，仍按全额计息' : ''))
+        : '';
+      if (loanBox) loanBox.style.display = loan > 0 ? '' : 'none';
+    };
+    ['f-qty', 'f-price', 'f-principal'].forEach(id => {
+      const el = m.dialog.querySelector('#' + id);
+      if (el) el.addEventListener('input', upd);
+    });
+    upd();
+    ui.bindFormValidation(m.dialog);
+    setTimeout(() => { const el = m.dialog.querySelector('#f-qty'); if (el) el.focus(); }, 50);
+  }
+
   /* ---------------- 详情视图 ---------------- */
   let _timer = null, _aiTimer = null;
+
   function clearTimer() {
     if (_timer) { clearInterval(_timer); _timer = null; }
     if (_aiTimer) { clearTimeout(_aiTimer); _aiTimer = null; }
@@ -655,6 +777,7 @@
         '<div class="page-head-main"><h1>' + ui.escapeHtml(q ? (q.name || rec.stockCode) : ('自选 ' + rec.stockCode)) + '</h1>' +
         '<div class="page-head-sub">' + ui.escapeHtml(rec.stockCode) + (rec.loanName ? ' · ' + ui.escapeHtml(rec.loanName) : '') + '</div></div>' +
         '<div class="page-head-actions">' +
+          '<button class="btn ghost sm" id="lev-add">+ 加仓</button>' +
           '<button class="btn ghost sm" id="lev-refresh">' + ui.icon('refresh', 15) + ' 刷新</button>' +
           '<button class="btn ghost sm" id="lev-edit">' + ui.icon('pencil', 15) + ' 编辑</button>' +
         '</div>' +
@@ -708,14 +831,14 @@
       '<div class="card section" id="lev-aicard"></div>' +
 
       '<div class="card section">' +
-        '<div class="sec-title">成本拆解（按 ' + c.Q + ' 股）</div>' +
+        '<div class="sec-title">成本拆解（持仓 ' + c.Q + ' 股 · 均价 ' + (c.Q ? (c.buy / c.Q).toFixed(3) : '—') + (c.adds.length ? ' · 加仓 ' + c.adds.length + ' 次' : '') + '）</div>' +
         '<div class="kv-list">' +
-          '<div class="kv"><span class="k">买入金额(已含买入费)</span><span class="v">' + money(c.buy) + '</span></div>' +
-          '<div class="kv"><span class="k">└ 贷款本金</span><span class="v">' + money0(st.P) + '</span></div>' +
-          '<div class="kv"><span class="k">└ 自有本金</span><span class="v">' + money0(c.own) + '</span></div>' +
-          '<div class="kv"><span class="k">贷款已计息 <i class="muted">已到期 ' + st.maturedCount + '/' + st.n + ' 期</i></span><span class="v">' + money(st.accrued) + '</span></div>' +
-          '<div class="kv"><span class="k">└ 已到期固定利息</span><span class="v">' + money(st.accruedMatured) + '</span></div>' +
-          '<div class="kv"><span class="k">└ 本期日息累计</span><span class="v">' + money(st.accruedDaily) + (rec.method !== 'daily' ? ' <i class="muted">(提前还款口径)</i>' : '') + '</span></div>' +
+          '<div class="kv"><span class="k">买入总额(各批买入价均已含费)</span><span class="v">' + money(c.buy) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 贷款本金合计</span><span class="v">' + money0(c.P) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 自有本金合计</span><span class="v">' + money0(c.own) + '</span></div>' +
+          '<div class="kv"><span class="k">贷款已计息合计 <i class="muted">已到期 ' + c.st.maturedCount + (c.ast ? c.ast.reduce((s, x) => s + (x ? x.maturedCount : 0), 0) : 0) + '/' + (c.st.n + (c.ast ? c.ast.reduce((s, x) => s + (x ? x.n : 0), 0) : 0)) + ' 期 · 含原贷款与加仓</i></span><span class="v">' + money(c.accrued) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 已到期固定利息</span><span class="v">' + money(c.st.accruedMatured + (c.ast ? c.ast.reduce((s, x) => s + (x ? x.accruedMatured : 0), 0) : 0)) + '</span></div>' +
+          '<div class="kv"><span class="k">└ 本期日息累计</span><span class="v">' + money(c.st.accruedDaily + (c.ast ? c.ast.reduce((s, x) => s + (x ? x.accruedDaily : 0), 0) : 0)) + ' <i class="muted">(提前还款口径)</i></span></div>' +
           '<div class="kv"><span class="k">提前还款违约金</span><span class="v">' + money(c.prepayFee) + '</span></div>' +
           '<div class="kv total"><span class="k">保本总成本(含利息)</span><span class="v">' + money(c.costNow) + '</span></div>' +
           (c.curPrice ? '<div class="kv"><span class="k">当前市值</span><span class="v">' + money(c.market) + '</span></div>' +
@@ -724,28 +847,56 @@
         '</div>' +
       '</div>' +
 
-      (rec.method !== 'daily' ? (
+      (c.adds.length ? (
       '<div class="card section">' +
-        '<div class="sec-title">还款计划（每期利息' + (st.perFilled ? '·手填' : '·按总利息平均') + ' · 每月 ' + num(rec.repayDay, 25) + ' 号还款）</div>' +
-        '<div class="kv-list">' + scheduleHTML(rec, st) + '</div>' +
+        '<div class="sec-title">买入批次（首笔 + 加仓 ' + c.adds.length + ' 次）</div>' +
+        '<div class="kv-list">' +
+          '<div class="kv"><span class="k">' + ui.escapeHtml(rec.buyDate || rec.startDate || '首笔') + ' · 首笔 ' + num(rec.quantity) + ' 股 × ' + num(rec.buyPrice).toFixed(2) + '</span><span class="v">' + money(num(rec.buyPrice) * num(rec.quantity)) + '</span></div>' +
+          c.adds.map((a, i) => {
+            const sub = num(a.price) * num(a.qty);
+            const loan = num(a.principal);
+            const x = c.ast && c.ast[i];
+            return '<div class="kv"><span class="k">' + ui.escapeHtml(a.date || '') + ' · 加仓 ' + num(a.qty) + ' 股 × ' + num(a.price).toFixed(2) +
+              (loan > 0 ? ' <i class="muted">· 贷 ' + money0(loan) + '</i>' : ' <i class="muted">· 存款</i>') + '</span>' +
+              '<span class="v">' + money(sub) + (x ? ' <i class="muted">· 已计息 ' + money(x.accrued) + '</i>' : '') +
+              ' <button class="icon-btn lev-adddel" data-idx="' + i + '" title="删除本批加仓">' + ui.icon('trash', 14) + '</button></span></div>';
+          }).join('') +
+          '<div class="kv total"><span class="k">合并持仓</span><span class="v">' + c.Q + ' 股 · 均价 ' + (c.Q ? (c.buy / c.Q).toFixed(3) : '—') + ' · 总投入 ' + money(c.buy) + '</span></div>' +
+        '</div>' +
       '</div>'
       ) : '') +
 
+      (() => {
+        const segs = [];
+        if (rec.method !== 'daily') {
+          segs.push('<div class="sec-title">首笔贷款还款计划（每期利息' + (st.perFilled ? '·手填' : '·按总利息平均') + ' · 每月 ' + num(rec.repayDay, 25) + ' 号还款）</div>' +
+            '<div class="kv-list">' + scheduleHTML(rec, st) + '</div>');
+        }
+        (c.adds || []).forEach((a, i) => {
+          const x = c.ast && c.ast[i];
+          if (!x || x.method === 'daily' || !x.P) return;
+          const ar = addLoanRec(a, rec);
+          segs.push('<div class="sec-title" style="margin-top:12px">加仓 ' + ui.escapeHtml(a.date || '') + ' · 贷款 ' + money0(x.P) + ' 还款计划（每月 ' + num(ar.repayDay, 25) + ' 号还款）</div>' +
+            '<div class="kv-list">' + scheduleHTML(ar, x) + '</div>');
+        });
+        return segs.length ? '<div class="card section">' + segs.join('') + '</div>' : '';
+      })() +
+
       '<div class="card section">' +
-        '<div class="sec-title">贷款信息</div>' +
+        '<div class="sec-title">贷款信息' + (c.adds.length ? '（合计，含加仓）' : '') + '</div>' +
         '<div class="kv-list">' +
-          '<div class="kv"><span class="k">贷款本金 / 自有本金</span><span class="v">' + money0(st.P) + ' / ' + money0(c.own) + '</span></div>' +
-          '<div class="kv"><span class="k">有效利率</span><span class="v">' + rateDisp + '</span></div>' +
-          '<div class="kv"><span class="k">还款方式</span><span class="v">' + METHOD[rec.method || 'daily'] + '</span></div>' +
-          '<div class="kv"><span class="k">期限 / 起息日</span><span class="v">' + st.n + ' 个月 · ' + ui.escapeHtml(rec.startDate || '') + '</span></div>' +
-          '<div class="kv"><span class="k">每日新增利息</span><span class="v lv-warn">' + money(st.daily) + ' / 天</span></div>' +
-          '<div class="kv"><span class="k">已产生利息</span><span class="v">' + money(st.accrued) + '</span></div>' +
-          '<div class="kv"><span class="k">剩余本金</span><span class="v">' + money0(st.remaining) + '</span></div>' +
-          '<div class="kv"><span class="k">整期总利息</span><span class="v">' + tiDisp + '</span></div>' +
-          '<div class="kv"><span class="k">每期应还</span><span class="v">' + mpDisp + '</span></div>' +
+          '<div class="kv"><span class="k">贷款本金合计 / 自有本金合计</span><span class="v">' + money0(c.P) + ' / ' + money0(c.own) + '</span></div>' +
+          '<div class="kv"><span class="k">有效利率' + (c.adds.length ? '（首笔）' : '') + '</span><span class="v">' + rateDisp + '</span></div>' +
+          '<div class="kv"><span class="k">还款方式' + (c.adds.length ? '（首笔）' : '') + '</span><span class="v">' + METHOD[rec.method || 'daily'] + '</span></div>' +
+          '<div class="kv"><span class="k">期限 / 起息日' + (c.adds.length ? '（首笔）' : '') + '</span><span class="v">' + st.n + ' 个月 · ' + ui.escapeHtml(rec.startDate || '') + '</span></div>' +
+          '<div class="kv"><span class="k">每日新增利息合计</span><span class="v lv-warn">' + money(c.daily) + ' / 天</span></div>' +
+          '<div class="kv"><span class="k">已产生利息合计</span><span class="v">' + money(c.accrued) + '</span></div>' +
+          '<div class="kv"><span class="k">剩余本金合计</span><span class="v">' + money0(c.remaining) + '</span></div>' +
+          '<div class="kv"><span class="k">整期总利息合计</span><span class="v">' + money(c.totalForCover) + (c.adds.length ? ' <i class="muted">(各批相加)</i>' : '') + '</span></div>' +
+          '<div class="kv"><span class="k">每期应还' + (c.adds.length ? '（首笔）' : '') + '</span><span class="v">' + mpDisp + '</span></div>' +
           '<div class="kv"><span class="k">保本价每日上浮</span><span class="v lv-warn">+' + c.drift.toFixed(4) + ' / 天</span></div>' +
         '</div>' +
-        '<div class="hint muted">多持有一天，保本卖出价就上浮约 ' + c.drift.toFixed(3) + ' 元 —— 这就是杠杆的时间成本。</div>' +
+        '<div class="hint muted">多持有一天，保本卖出价就上浮约 ' + c.drift.toFixed(3) + ' 元 —— 这就是杠杆的时间成本。原贷款利息持续累计，加仓贷款各自独立计息后合并。</div>' +
       '</div>' +
 
       '<div class="lev-disclaimer">本模块仅做成本与盈亏平衡测算，不构成任何投资建议。信贷资金按规定不得用于证券投资，请自行评估合规风险。</div>' +
@@ -797,6 +948,21 @@
       paintAI(lastDg, !aiReady);
       root.querySelector('#lev-back').onclick = () => { clearTimer(); render(root); };
       root.querySelector('#lev-edit').onclick = () => openForm(rec, () => openDetail(root, rec));
+      const addBtn = root.querySelector('#lev-add');
+      if (addBtn) addBtn.onclick = () => openAddForm(rec, () => { ui.toast('已加仓，持仓与利息已合并重算'); openDetail(root, rec); });
+      root.querySelectorAll('.lev-adddel').forEach(b => {
+        b.onclick = async () => {
+          const idx = parseInt(b.dataset.idx, 10);
+          if (!isFinite(idx) || !rec.adds || !rec.adds[idx]) return;
+          if (await ui.confirm({ title: '删除加仓批次', message: '删除这批加仓后，持仓与利息将按剩余批次重新合并计算。确定删除吗？', confirmLabel: '删除', danger: true })) {
+            rec.adds.splice(idx, 1);
+            rec.updatedAt = Date.now();
+            await store.put('leverage', rec);
+            ui.toast('已删除该批加仓');
+            openDetail(root, rec);
+          }
+        };
+      });
       root.querySelector('#lev-refresh').onclick = async () => {
         try { q = await fetchQuote(rec.stockCode); ui.toast('行情已刷新'); }
         catch (e) { ui.toast('行情获取失败：' + e.message, 'warn'); }
@@ -820,7 +986,7 @@
         { price: c.coverAccrued, label: '累计息', color: 'var(--success)' },
         { price: c.breakeven, label: '保本', color: 'var(--warn)' },
         { price: c.coverAll, label: '覆息', color: 'var(--danger)' },
-        { price: num(rec.buyPrice), label: '成本', color: 'var(--muted)' }
+        { price: c.Q ? c.buy / c.Q : num(rec.buyPrice), label: '均价', color: 'var(--muted)' }
       ];
       try {
         if (chartType === 'trend') {
@@ -891,17 +1057,16 @@
             '<div class="lev-title">' + ui.escapeHtml(r.loanName || '贷款') +
               ' <span class="muted">→ ' + ui.escapeHtml(r.stockName ? (r.stockName + ' ' + r.stockCode) : r.stockCode) + '</span></div>' +
             '<div class="lev-nums">' +
-              '<span>贷 <b>' + money0(r.principal) + '</b></span>' +
+              '<span>贷 <b>' + money0(c.P) + '</b></span>' +
               '<span>自有 <b>' + money0(c.own) + '</b></span>' +
-              '<span>买入 <b>' + num(r.buyPrice).toFixed(2) + '</b></span>' +
+              '<span>均价 <b>' + (c.Q ? (c.buy / c.Q).toFixed(2) : '—') + '</b></span>' +
               '<span>保本 <b class="lv-warn">' + c.breakeven.toFixed(2) + '</b></span>' +
               '<span>覆息 <b class="lv-danger">' + c.coverAll.toFixed(2) + '</b></span>' +
             '</div>' +
             '<div class="lev-sub muted">' + METHOD[r.method || 'daily'] + ' · ' + rateTxt +
               (c.st.rateSource === 'implied' ? ' (反推)' : '') +
-              (r.method && r.method !== 'daily'
-                ? ' · 已到期 ' + c.st.maturedCount + '/' + c.st.n + ' 期 · 本期日息 ' + money(c.st.daily)
-                : ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.st.daily)) + '</div>' +
+              (c.adds && c.adds.length ? ' · 加仓 ' + c.adds.length + ' 次' : '') +
+              ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.daily) + '</div>' +
           '</div>' +
           '<div class="row-actions">' +
             '<button class="icon-btn del" title="删除">' + ui.icon('trash', 16) + '</button>' +
@@ -931,7 +1096,7 @@
 
   // 暴露纯计算函数，便于校验与跨模块复用
   WB.leverage = { METHOD, METHOD_HINT, DEF, loanState, solvePrice, calc, rates, buyFees, sellFees, daysBetween, marketOf,
-    AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
+    addLoanRec, addState, AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
 
   WB.modules.push({ id: 'leverage', title: '杠杆测算', icon: 'trendingUp', render });
 })(window.WB = window.WB || {});
