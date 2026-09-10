@@ -522,10 +522,136 @@
         { name: 'stampRate', label: '印花税 %（仅卖出）', type: 'number', value: d('stampRate', DEF.stampRate), min: 0, flex: 1, row: 2 },
         { name: 'transferRate', label: '过户费 %（双边）', type: 'number', value: d('transferRate', DEF.transferRate), min: 0, flex: 1, row: 2 }
       ]) +
-      '<div class="hint muted">你使用国信证券：买入价已含买入佣金与过户费，下方费率仅用于计算「卖出」时的费用——佣金(万2.5/最低5元) + 印花税(0.05% 单边) + 过户费(0.001% 双边，卖出侧)。都可在设置里改成你的真实费率。</div>';
+      '<div class="hint muted">你使用国信证券：买入价已含买入佣金与过户费，下方费率仅用于计算「卖出」时的费用——佣金(万2.5/最低5元) + 印花税(0.05% 单边) + 过户费(0.001% 双边，卖出侧)。都可在设置里改成你的真实费率。</div>' +
+      '<div id="f-warn" class="lev-warnbox" style="display:none"></div>';
+  }
+
+  /* ---------------- 输入异常校验（本地启发式，只提示不阻断） ----------------
+   * 返回 [{lv:'danger'|'warn', msg}]：danger＝极可能填错（保存前二次确认），warn＝提醒。
+   * ctx: { quote:{price,name}|null, baseDate: 首笔买入日（加仓场景）, baseBuyPrice, isAdd }
+   */
+  const CHK = {
+    priceDanger: 10,   // 买入价/现价 ≥10 或 ≤1/10 → 极可能多/少填一位
+    priceWarn: 3,      // ≥3 或 ≤1/3 → 提醒
+    dailyWarn: 0.05,   // 日利率% >0.05（年化≈18.25%）
+    dailyDanger: 0.1,  // 日利率% >0.1（年化≈36.5%，高利贷红线）
+    annualWarn: 24, annualDanger: 36,
+    termMaxMonths: 60,
+    pastYears: 5,
+    commMax: 0.3, stampMax: 0.2
+  };
+  function warnList(rec, ctx) {
+    ctx = ctx || {};
+    const out = [];
+    const push = (lv, msg) => out.push({ lv: lv, msg: msg });
+    const q = ctx.quote;
+    const bp = num(rec.buyPrice);
+    const qty = num(rec.quantity);
+    const P = num(rec.principal);
+    const n = Math.max(1, num(rec.termMonths, 3));
+
+    // 1) 买入价 vs 当前股价（多填/少填一位数是最高频错误）
+    if (q && q.price > 0 && bp > 0) {
+      const r = bp / q.price;
+      if (r >= CHK.priceDanger) {
+        push('danger', '买入价 ' + bp.toFixed(2) + ' 是当前股价 ' + q.price.toFixed(2) + ' 的 ' + Math.round(r) + ' 倍，很可能多填了一位，请确认是否填错');
+      } else if (r <= 1 / CHK.priceDanger) {
+        push('danger', '买入价 ' + bp.toFixed(2) + ' 只有当前股价 ' + q.price.toFixed(2) + ' 的 1/' + Math.round(1 / r) + '，很可能少填了一位，请确认是否填错');
+      } else if (r >= CHK.priceWarn) {
+        push('warn', '买入价 ' + bp.toFixed(2) + ' 高于当前股价 ' + q.price.toFixed(2) + '（' + r.toFixed(1) + ' 倍），若不是历史高位买入请检查');
+      } else if (r <= 1 / CHK.priceWarn) {
+        push('warn', '买入价 ' + bp.toFixed(2) + ' 明显低于当前股价 ' + q.price.toFixed(2) + '（仅为 1/' + (1 / r).toFixed(1) + '），请检查是否漏填');
+      }
+    }
+
+    // 2) 日利率（年化 = 日利率 × 365）
+    const dr = num(rec.dailyRate);
+    if (dr > CHK.dailyDanger) {
+      push('danger', '日利率 ' + dr + '% 相当于年化 ' + (dr * 365).toFixed(1) + '%，超过高利贷红线（年化 36%），请确认是否把年利率填进了日利率');
+    } else if (dr > CHK.dailyWarn) {
+      push('warn', '日利率 ' + dr + '% 相当于年化 ' + (dr * 365).toFixed(1) + '%，高于常见商业贷款（一般不超过年化 24%）');
+    }
+
+    // 3) 年利率
+    const ar = num(rec.annualRate);
+    if (ar > CHK.annualDanger) push('danger', '年利率 ' + ar + '% 超过 36%（高利贷红线），请确认');
+    else if (ar > CHK.annualWarn) push('warn', '年利率 ' + ar + '% 高于司法保护区上限（约 24%），超出部分不受法律保护');
+
+    // 4) 反推年化（覆盖「期限总利息 / 每期利息」口径，只要能算出年化就校验）
+    if (P > 0 && bp >= 0 && !ctx.skipImplied) {
+      try {
+        const st = loanState(Object.assign({}, rec, { principal: P, startDate: rec.startDate || todayISO() }), 0);
+        const ia = st.impliedAnnual;
+        if (ia > CHK.annualDanger) push('danger', '按本金与总利息反推年化约 ' + ia.toFixed(1) + '%，超过 36%（高利贷红线），请确认总利息是否填错');
+        else if (ia > CHK.annualWarn) push('warn', '按本金与总利息反推年化约 ' + ia.toFixed(1) + '%，高于常见商业贷款水平');
+      } catch (e) { /* 反推失败则跳过 */ }
+    }
+
+    // 5) 每期利息条数 ≠ 期限月数（条数不一致时该字段会被整段忽略）
+    if (rec.periodInterests) {
+      const arr = String(rec.periodInterests).split(',').map(s => s.trim()).filter(Boolean);
+      if (arr.length && arr.length !== n) {
+        push('warn', '每期利息填了 ' + arr.length + ' 条，与借款期限 ' + n + ' 个月不一致 —— 条数不一致时该字段不会被采用，请补齐或清空');
+      }
+    }
+
+    // 6) 期限异常
+    if (n > CHK.termMaxMonths) push('warn', '借款期限 ' + n + ' 个月（超过 5 年），消费贷一般不超过 3-5 年，请确认');
+
+    // 7) 起息日
+    if (rec.startDate) {
+      if (rec.startDate > todayISO()) push('warn', '起息日 ' + rec.startDate + ' 晚于今天，贷款尚未开始计息');
+      else if (daysBetween(rec.startDate) > CHK.pastYears * 365) push('warn', '起息日距今已超过 ' + CHK.pastYears + ' 年，请确认是否填错年份');
+    }
+
+    // 8) 买入数量不是 100 的整数倍（A股按「手」）
+    if (qty > 0 && qty % 100 !== 0) push('warn', '买入数量 ' + qty + ' 股不是 100 的整数倍，A股通常按「手」（100 股）的整数倍买入');
+
+    // 9) 贷款金额 > 买入总额（差额未投入但仍全额计息）
+    const buy = bp * qty;
+    if (P > buy && buy > 0) push('warn', '贷款金额 ' + money0(P) + ' 大于买入总额 ' + money0(buy) + '，差额未投入股票但仍按全额计息');
+
+    // 10) 加仓日期早于首笔买入日
+    if (ctx.baseDate && rec.startDate && rec.startDate < ctx.baseDate) {
+      push('warn', '加仓日期 ' + rec.startDate + ' 早于首笔买入日 ' + ctx.baseDate + '，请确认');
+    }
+
+    // 11) 费率明显偏离常见水平（仅主表单）
+    if (rec.commissionRate != null && num(rec.commissionRate) > CHK.commMax) push('warn', '佣金率 ' + num(rec.commissionRate) + '% 明显高于常见水平（万2.5 = 0.025%）');
+    if (rec.stampRate != null && num(rec.stampRate) > CHK.stampMax) push('warn', '印花税 ' + num(rec.stampRate) + '% 明显高于现行标准（0.05%，仅卖出）');
+
+    // 12) 每期应还明显偏小（像是只填了利息）
+    const mp = num(rec.monthlyPayment);
+    if (mp > 0 && P > 0 && n > 0 && mp < (P / n) * 0.9) {
+      push('warn', '每期应还 ' + money0(mp) + ' 小于「本金 ÷ 期数」' + money0(P / n) + '，看起来只填了利息部分？');
+    }
+    return out;
+  }
+
+  function warnBoxHTML(list) {
+    if (!list || !list.length) return '';
+    return '<div class="lw-head">⚠ 检测到 ' + list.length + ' 处异常（可忽略后继续保存）</div>' +
+      list.map(w => '<div class="lw-item ' + w.lv + '">' + ui.escapeHtml(w.msg) + '</div>').join('');
+  }
+  function renderWarn(box, list) {
+    if (!box) return;
+    if (!list || !list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = warnBoxHTML(list);
+  }
+  // danger 级异常：保存前二次确认，用户可坚持保存
+  async function confirmRisky(list) {
+    const danger = (list || []).filter(w => w.lv === 'danger');
+    if (!danger.length) return true;
+    return await ui.confirm({
+      title: '数据异常确认',
+      message: '检测到以下可能填错的数据：\n\n· ' + danger.map(w => w.msg).join('\n· ') + '\n\n确定仍要按此保存吗？',
+      confirmLabel: '仍然保存', danger: true
+    });
   }
 
   function openForm(rec, onSaved) {
+    let quote = null, riskAck = false;
     const m = ui.openModal({
       title: rec ? '编辑测算' : '新建测算', html: formHTML(rec),
       actions: [{ label: '取消' }, {
@@ -533,6 +659,12 @@
           const g = id => m.dialog.querySelector('#f-' + id).value.trim();
           const code = g('stockCode').replace(/\D/g, '');
           if (!code) { ui.toast('股票代码格式不对', 'warn'); return; }
+          // 保存前复检：danger 级异常需二次确认（用户可坚持保存）
+          if (!riskAck) {
+            const wl = warnList(readRec(), { quote: quote });
+            if (!(await confirmRisky(wl))) return;
+            riskAck = true;
+          }
           const obj = rec ? Object.assign({}, rec) : { id: store.uid() };
           obj.loanName = g('loanName');
           obj.principal = num(g('principal'));
@@ -590,6 +722,38 @@
       if (el) el.addEventListener('input', updOwn);
     });
     updOwn();
+
+    // 输入异常校验：实时爆红提示（股价比对需先取一次行情，代码填好后自动拉取）
+    const warnEl = m.dialog.querySelector('#f-warn');
+    function readRec() {
+      const g = id => { const el = m.dialog.querySelector('#f-' + id); return el ? el.value.trim() : ''; };
+      return {
+        buyPrice: num(g('buyPrice')), quantity: num(g('quantity')), principal: num(g('principal')),
+        dailyRate: g('dailyRate'), annualRate: g('annualRate'), termInterest: g('termInterest'),
+        periodInterests: g('periodInterests'), monthlyPayment: g('monthlyPayment'),
+        termMonths: Math.max(1, num(g('termMonths'), 3)), method: g('method'), startDate: g('startDate'),
+        buyDate: g('buyDate'), dayBasis: num(g('dayBasis'), 360), repayDay: num(g('repayDay'), 25),
+        commissionRate: num(g('commissionRate'), DEF.commissionRate), stampRate: num(g('stampRate'), DEF.stampRate),
+        transferRate: num(g('transferRate'), DEF.transferRate), minCommission: num(g('minCommission'), DEF.minCommission)
+      };
+    }
+    function runCheck() {
+      try { renderWarn(warnEl, warnList(readRec(), { quote: quote })); } catch (e) { /* 校验出错不阻塞填写 */ }
+    }
+    const codeEl = m.dialog.querySelector('#f-stockCode');
+    async function loadQuote() {
+      const code = (codeEl ? codeEl.value : '').replace(/\D/g, '');
+      if (!code || code.length < 5) { quote = null; runCheck(); return; }
+      try { quote = await withTimeout(fetchQuote(code), 4000); } catch (e) { quote = null; }
+      runCheck();
+    }
+    if (codeEl) { codeEl.addEventListener('change', loadQuote); codeEl.addEventListener('blur', loadQuote); }
+    m.dialog.querySelectorAll('.input').forEach(el => {
+      el.addEventListener('input', runCheck);
+      el.addEventListener('change', runCheck);
+    });
+    runCheck();
+    if (codeEl && codeEl.value) loadQuote();
     ui.bindFormValidation(m.dialog);
   }
 
@@ -616,7 +780,9 @@
           { name: 'annualRate', label: '本批年利率 %(留空沿用首笔)', type: 'number', value: '', min: 0, flex: 1, row: 3 }
         ]) +
         '<div class="hint muted">「期限总利息 / 每期利息 / 每期应还」这类<b>金额只按本批填的算</b>，不会沿用首笔（避免把首笔的总利息错算到新批）；日利率 / 年利率留空则沿用首笔贷款设置。</div>' +
-      '</div>';
+      '</div>' +
+      '<div id="f-warn" class="lev-warnbox" style="display:none"></div>';
+    let quote = null, riskAck = false;
     const m = ui.openModal({
       title: '加仓 · ' + (rec.stockName || rec.stockCode),
       html: html,
@@ -626,6 +792,12 @@
           const qty = Math.max(1, num(g('qty'), 0));
           const price = num(g('price'));
           if (!(qty > 0) || !(price > 0)) { ui.toast('请填买入数量和买入价', 'warn'); return; }
+          // 保存前复检：danger 级异常二次确认（用户可坚持保存）
+          if (!riskAck) {
+            const wl = warnList(readRec(), { quote: quote, baseDate: rec.buyDate || rec.startDate });
+            if (!(await confirmRisky(wl))) return;
+            riskAck = true;
+          }
           const obj = Object.assign({}, rec);
           const add = {
             id: store.uid(),
@@ -676,6 +848,37 @@
       if (el) el.addEventListener('input', upd);
     });
     upd();
+
+    // 输入异常校验（加仓场景：买入价取本批 price，日期取本批 date，沿用首笔费率）
+    const warnEl = m.dialog.querySelector('#f-warn');
+    function readRec() {
+      const g = id => { const el = m.dialog.querySelector('#f-' + id); return el ? el.value.trim() : ''; };
+      return {
+        buyPrice: num(g('price')), quantity: num(g('qty')), principal: num(g('principal')),
+        dailyRate: g('dailyRate'), annualRate: g('annualRate'), termInterest: g('termInterest'),
+        periodInterests: g('periodInterests'), monthlyPayment: '',
+        termMonths: Math.max(1, num(g('termMonths'), num(rec.termMonths, 3))),
+        method: g('method') || rec.method || 'daily', startDate: g('date') || todayISO(),
+        dayBasis: num(rec.dayBasis, 360), repayDay: num(rec.repayDay, 25),
+        commissionRate: num(rec.commissionRate, DEF.commissionRate), stampRate: num(rec.stampRate, DEF.stampRate),
+        transferRate: num(rec.transferRate, DEF.transferRate), minCommission: num(rec.minCommission, DEF.minCommission)
+      };
+    }
+    function runCheck() {
+      try { renderWarn(warnEl, warnList(readRec(), { quote: quote, baseDate: rec.buyDate || rec.startDate })); } catch (e) {}
+    }
+    m.dialog.querySelectorAll('.input').forEach(el => {
+      el.addEventListener('input', runCheck);
+      el.addEventListener('change', runCheck);
+    });
+    runCheck();
+    // 取一次实时行情用于「买入价 vs 现价」比对
+    (async () => {
+      try {
+        const q0 = await withTimeout(fetchQuote(rec.stockCode), 4000);
+        if (q0 && q0.price) { quote = q0; runCheck(); }
+      } catch (e) { /* 无行情则跳过价格校验 */ }
+    })();
     ui.bindFormValidation(m.dialog);
     setTimeout(() => { const el = m.dialog.querySelector('#f-qty'); if (el) el.focus(); }, 50);
   }
@@ -1101,7 +1304,7 @@
 
   // 暴露纯计算函数，便于校验与跨模块复用
   WB.leverage = { METHOD, METHOD_HINT, DEF, loanState, solvePrice, calc, rates, buyFees, sellFees, daysBetween, marketOf,
-    addLoanRec, addState, AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
+    addLoanRec, addState, CHK, warnList, warnBoxHTML, AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
 
   WB.modules.push({ id: 'leverage', title: '杠杆测算', icon: 'trendingUp', render });
 })(window.WB = window.WB || {});
