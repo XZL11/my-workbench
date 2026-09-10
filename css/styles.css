@@ -1780,3 +1780,13 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
 .hq-tip { color: var(--muted); font-size: 12.5px; }
 .home-quote .btn { flex: 0 0 auto; }
 @media (max-width: 560px) { .home-quote { flex-wrap: wrap; } .home-quote .btn { width: 100%; } }
+
+/* ===== 杠杆测算 · 输入异常提示框 ===== */
+.lev-warnbox { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+.lw-head { font-size: 12.5px; font-weight: 700; color: var(--danger); margin-bottom: 6px; }
+.lw-item { font-size: 12.5px; line-height: 1.6; padding: 5px 0 5px 18px; position: relative; color: var(--text); }
+.lw-item + .lw-item { border-top: 1px dashed color-mix(in srgb, var(--danger) 20%, transparent); }
+.lw-item::before { content: '!'; position: absolute; left: 4px; top: 6px; width: 12px; height: 12px; line-height: 12px; text-align: center; border-radius: 50%; font-size: 10px; font-weight: 700; color: #fff; }
+.lw-item.danger { color: var(--danger); font-weight: 600; }
+.lw-item.danger::before { background: var(--danger); }
+.lw-item.warn::before { background: #f5a623; }
