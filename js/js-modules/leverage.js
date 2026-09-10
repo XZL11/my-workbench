@@ -777,7 +777,7 @@
         '<div class="page-head-main"><h1>' + ui.escapeHtml(q ? (q.name || rec.stockCode) : ('自选 ' + rec.stockCode)) + '</h1>' +
         '<div class="page-head-sub">' + ui.escapeHtml(rec.stockCode) + (rec.loanName ? ' · ' + ui.escapeHtml(rec.loanName) : '') + '</div></div>' +
         '<div class="page-head-actions">' +
-          '<button class="btn ghost sm" id="lev-add">+ 加仓</button>' +
+          '<button class="btn primary sm lev-addbtn">+ 加仓</button>' +
           '<button class="btn ghost sm" id="lev-refresh">' + ui.icon('refresh', 15) + ' 刷新</button>' +
           '<button class="btn ghost sm" id="lev-edit">' + ui.icon('pencil', 15) + ' 编辑</button>' +
         '</div>' +
@@ -847,9 +847,9 @@
         '</div>' +
       '</div>' +
 
-      (c.adds.length ? (
       '<div class="card section">' +
-        '<div class="sec-title">买入批次（首笔 + 加仓 ' + c.adds.length + ' 次）</div>' +
+        '<div class="sec-title">买入批次（' + (c.adds.length ? '首笔 + 加仓 ' + c.adds.length + ' 次' : '仅首笔，可加仓') + '）' +
+          '<button class="btn primary sm lev-addbtn" style="float:right;margin-top:-2px">+ 加仓</button></div>' +
         '<div class="kv-list">' +
           '<div class="kv"><span class="k">' + ui.escapeHtml(rec.buyDate || rec.startDate || '首笔') + ' · 首笔 ' + num(rec.quantity) + ' 股 × ' + num(rec.buyPrice).toFixed(2) + '</span><span class="v">' + money(num(rec.buyPrice) * num(rec.quantity)) + '</span></div>' +
           c.adds.map((a, i) => {
@@ -863,8 +863,7 @@
           }).join('') +
           '<div class="kv total"><span class="k">合并持仓</span><span class="v">' + c.Q + ' 股 · 均价 ' + (c.Q ? (c.buy / c.Q).toFixed(3) : '—') + ' · 总投入 ' + money(c.buy) + '</span></div>' +
         '</div>' +
-      '</div>'
-      ) : '') +
+      '</div>' +
 
       (() => {
         const segs = [];
@@ -948,8 +947,8 @@
       paintAI(lastDg, !aiReady);
       root.querySelector('#lev-back').onclick = () => { clearTimer(); render(root); };
       root.querySelector('#lev-edit').onclick = () => openForm(rec, () => openDetail(root, rec));
-      const addBtn = root.querySelector('#lev-add');
-      if (addBtn) addBtn.onclick = () => openAddForm(rec, () => { ui.toast('已加仓，持仓与利息已合并重算'); openDetail(root, rec); });
+      const addBtns = root.querySelectorAll('.lev-addbtn');
+      addBtns.forEach(b => { b.onclick = () => openAddForm(rec, () => { ui.toast('已加仓，持仓与利息已合并重算'); openDetail(root, rec); }); });
       root.querySelectorAll('.lev-adddel').forEach(b => {
         b.onclick = async () => {
           const idx = parseInt(b.dataset.idx, 10);
@@ -1069,6 +1068,7 @@
               ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.daily) + '</div>' +
           '</div>' +
           '<div class="row-actions">' +
+            '<button class="btn ghost sm lev-listadd" title="给这只股票加仓">＋加仓</button>' +
             '<button class="icon-btn del" title="删除">' + ui.icon('trash', 16) + '</button>' +
           '</div>' +
         '</div>';
@@ -1087,6 +1087,11 @@
         if (await ui.confirm({ title: '删除测算', message: '确定删除这条测算记录吗？删除后可在提示中撤销。', confirmLabel: '删除', danger: true })) {
           ui.trash('leverage', id, { label: '已删除测算', repaint: reload });
         }
+        return;
+      }
+      if (e.target.closest('.lev-listadd')) {
+        const r = recs.find(x => x.id === id);
+        if (r) openAddForm(r, () => { ui.toast('已加仓，持仓与利息已合并重算'); reload(); });
         return;
       }
       const rec = recs.find(r => r.id === id);
