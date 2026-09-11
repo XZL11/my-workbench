@@ -1790,3 +1790,15 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
 .lw-item.danger { color: var(--danger); font-weight: 600; }
 .lw-item.danger::before { background: var(--danger); }
 .lw-item.warn::before { background: #f5a623; }
+
+/* ===== 杠杆测算 · 完结/卖出/还款 ===== */
+.lv-st-done { background: color-mix(in srgb, var(--success) 16%, transparent); color: #0a7d2f; border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.lv-st-sold { background: color-mix(in srgb, #f5a623 16%, transparent); color: #a86a00; border-color: color-mix(in srgb, #f5a623 45%, transparent); }
+.lv-st-part { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, transparent); }
+.lv-st-hold { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+.card.lev.lev-closed { opacity: .92; }
+.lev-final { border: 1px solid color-mix(in srgb, var(--success) 40%, transparent); background: linear-gradient(135deg, color-mix(in srgb, var(--success) 7%, var(--surface)), var(--surface)); }
+.lev-final-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 4px; }
+.lf-item { border: 1px solid var(--border); border-radius: 12px; padding: 9px 11px; background: var(--surface-2, #f7f8fa); }
+.lf-k { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.lf-v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
