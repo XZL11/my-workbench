@@ -1802,3 +1802,18 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
 .lf-item { border: 1px solid var(--border); border-radius: 12px; padding: 9px 11px; background: var(--surface-2, #f7f8fa); }
 .lf-k { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
 .lf-v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ===== 杠杆测算 · 移动端布局优化 ===== */
+.lev-ops { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.lev-ops .btn { flex: 1; min-width: 88px; justify-content: center; }
+@media (max-width: 640px) {
+  .page-head { flex-wrap: wrap; gap: 8px; }
+  .page-head-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; width: 100%; }
+  .page-head-actions .btn { padding: 5px 10px; font-size: 12px; }
+  .page-head-actions .btn .icon, .page-head-actions svg { width: 14px; height: 14px; }
+  .lev-keygrid { grid-template-columns: 1fr; }
+  .lev-nums { gap: 8px; }
+  .card.lev { align-items: flex-start; }
+  .card.lev .row-actions { align-self: flex-start; }
+  .lev-ops .btn { min-width: 0; }
+}
