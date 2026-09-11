@@ -1150,6 +1150,29 @@
     return h;
   }
 
+  // 已清仓后的「卖出结算」摘要：替代行情/图表/保本价等股票信息
+  function soldSummaryHTML(rec, c) {
+    const avgSell = c.soldQty > 0 ? c.sellGross / c.soldQty : 0;
+    const avgBuy = c.Q > 0 ? c.buy / c.Q : 0;
+    const netProfit = c.sellNet - c.buy - c.accrued - c.prepayFee;
+    return '<div class="card section lev-sold">' +
+      '<div class="sec-title">卖出结算（已清仓 ' + c.soldQty + ' 股）</div>' +
+      '<div class="lev-final-grid">' +
+        '<div class="lf-item"><div class="lf-k">卖出均价</div><div class="lf-v">' + avgSell.toFixed(3) + '</div></div>' +
+        '<div class="lf-item"><div class="lf-k">买入均价(成本)</div><div class="lf-v">' + avgBuy.toFixed(3) + '</div></div>' +
+        '<div class="lf-item"><div class="lf-k">卖出到手</div><div class="lf-v">' + money(c.sellNet) + '</div></div>' +
+        '<div class="lf-item"><div class="lf-k">已实现盈亏</div><div class="lf-v ' + cls(c.sellPnlTotal) + '">' + (c.sellPnlTotal >= 0 ? '+' : '') + money(c.sellPnlTotal) + '</div></div>' +
+      '</div>' +
+      '<div class="kv-list">' +
+        '<div class="kv"><span class="k">卖出总额 / 交易费用</span><span class="v">' + money(c.sellGross) + ' / ' + money(c.sellFeeTotal) + '</span></div>' +
+        '<div class="kv"><span class="k">买入总成本</span><span class="v">' + money(c.buy) + '</span></div>' +
+        '<div class="kv"><span class="k">贷款利息合计</span><span class="v">' + money(c.accrued) + '</span></div>' +
+        '<div class="kv total"><span class="k">净利润（到手 − 成本 − 利息 − 违约金）</span><span class="v ' + cls(netProfit) + '">' + (netProfit >= 0 ? '+' : '') + money(netProfit) + '</span></div>' +
+      '</div>' +
+      '<div class="hint muted">股票已全部卖出，行情、图表与保本价不再展示。下方保留贷款与还款信息 —— 未还款前利息仍在累计。</div>' +
+    '</div>';
+  }
+
   function detailHTML(rec, q, c) {
     const st = c.st;
     let rateDisp;
@@ -1192,6 +1215,8 @@
         '</div>' +
       '</div>' +
 
+      // 已清仓 → 不显示行情/关键价格/图表/AI日报，改为「卖出结算」摘要
+      (c.leftQty > 0 ? (
       '<div class="card section lev-quote">' +
         (q ? (
           '<div class="lq-top"><div class="lq-price ' + cls(q.chg) + '">' + q.price.toFixed(2) + '</div>' +
@@ -1237,7 +1262,8 @@
         '<div id="lev-chartbox" class="lc-body"><div class="sk-line w70" style="height:180px"></div></div>' +
       '</div>' +
 
-      '<div class="card section" id="lev-aicard"></div>' +
+      '<div class="card section" id="lev-aicard"></div>'
+      ) : soldSummaryHTML(rec, c)) +
 
       '<div class="card section">' +
         '<div class="sec-title">成本拆解（持仓 ' + c.Q + ' 股 · 均价 ' + (c.Q ? (c.buy / c.Q).toFixed(3) : '—') + (c.adds.length ? ' · 加仓 ' + c.adds.length + ' 次' : '') + '）</div>' +
@@ -1258,7 +1284,7 @@
 
       '<div class="card section">' +
         '<div class="sec-title">买入批次（' + (c.adds.length ? '首笔 + 加仓 ' + c.adds.length + ' 次' : '仅首笔，可加仓') + '）' +
-          '<button class="btn primary sm lev-addbtn" style="float:right;margin-top:-2px">+ 加仓</button></div>' +
+          (showAdd ? '<button class="btn primary sm lev-addbtn" style="float:right;margin-top:-2px">+ 加仓</button>' : '') + '</div>' +
         '<div class="kv-list">' +
           '<div class="kv"><span class="k">' + ui.escapeHtml(rec.buyDate || rec.startDate || '首笔') + ' · 首笔 ' + num(rec.quantity) + ' 股 × ' + num(rec.buyPrice).toFixed(2) + '</span><span class="v">' + money(num(rec.buyPrice) * num(rec.quantity)) + '</span></div>' +
           c.adds.map((a, i) => {
@@ -1633,7 +1659,7 @@
 
   // 暴露纯计算函数，便于校验与跨模块复用
   WB.leverage = { METHOD, METHOD_HINT, DEF, loanState, solvePrice, calc, rates, buyFees, sellFees, daysBetween, marketOf,
-    addLoanRec, addState, CHK, warnList, warnBoxHTML, AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
+    addLoanRec, addState, CHK, warnList, warnBoxHTML, soldSummaryHTML, detailHTML, AI_HOUR, digestKey, msToNextAI, fetchNews, fetchAnn, buildDigest, aiCardHTML };
 
   WB.modules.push({ id: 'leverage', title: '杠杆测算', icon: 'trendingUp', render });
 })(window.WB = window.WB || {});
