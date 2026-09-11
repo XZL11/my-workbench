@@ -236,47 +236,78 @@
       repayDay: blank(add.repayDay) ? num(rec.repayDay, 25) : num(add.repayDay)
     };
   }
-  // 批次贷款状态；纯自有加仓（贷款=0）返回 null，不产生利息
-  function addState(add, rec) {
+  // 批次贷款状态；纯自有加仓（贷款=0）返回 null，不产生利息。endISO 为计息截止日（结清后不再计息）
+  function addState(add, rec, endISO) {
     const ar = addLoanRec(add, rec);
     if (!ar.principal) return null;
-    return loanState(ar, daysBetween(ar.startDate));
+    return loanState(ar, daysBetween(ar.startDate, endISO));
   }
 
-  // 聚合计算：持仓合并（总股数/总买入额），各批贷款独立计息后累计。
-  // 关键原则：原贷款利息不因加仓被清除/重算，始终在 loanState(rec, D) 里累计；
-  //           加仓贷款各自的利息在其批次状态里累计，最终汇总。
+  // 聚合计算：持仓合并（总股数/总买入额），各批贷款独立计息后累计；含卖出/还款/结清。
+  // 关键原则：原贷款利息不因加仓被清除/重算；结清后利息停止累计；还款按「先息后本」冲抵。
   function calc(rec, curPrice) {
     const adds = Array.isArray(rec.adds) ? rec.adds : [];
+    const sells = Array.isArray(rec.sells) ? rec.sells : [];
+    const reps = Array.isArray(rec.repayments) ? rec.repayments : [];
+    const closed = !!rec.closed;
+    const endISO = closed ? (rec.closedAt || rec.buyDate || todayISO()) : undefined; // 结清后停止计息
     const baseQ = num(rec.quantity, 0);
-    const Q = adds.reduce((s, a) => s + num(a.qty), baseQ);                    // 总股数
-    const buy = adds.reduce((s, a) => s + num(a.price) * num(a.qty), num(rec.buyPrice) * baseQ); // 总买入额（各批买入价均已含费）
-    const D = daysBetween(rec.startDate);
-    const st = loanState(rec, D);                                              // 首笔贷款状态（原利息持续累计）
-    const ast = adds.map(a => addState(a, rec));                               // 各加仓批次贷款状态（无贷款为 null）
+    const Q = adds.reduce((s, a) => s + num(a.qty), baseQ);                    // 总股数（含已卖出）
+    const buy = adds.reduce((s, a) => s + num(a.price) * num(a.qty), num(rec.buyPrice) * baseQ); // 总买入额
+    const D = daysBetween(rec.startDate, endISO);
+    const st = loanState(rec, D);                                              // 首笔贷款状态
+    const ast = adds.map(a => addState(a, rec, endISO));                       // 各加仓批次贷款状态
 
     const P = ast.reduce((s, x) => s + (x ? x.P : 0), st.P);                   // 贷款本金合计
-    const own = Math.max(0, buy - P);                                          // 自有本金 = 总投入 − 贷款合计
-    const accrued = ast.reduce((s, x) => s + (x ? x.accrued : 0), st.accrued); // 累计已计息合计（原贷款 + 各加仓贷款）
-    const remaining = ast.reduce((s, x) => s + (x ? x.remaining : 0), st.remaining); // 剩余本金合计
+    const own = Math.max(0, buy - P);                                          // 自有本金
+    const accrued = ast.reduce((s, x) => s + (x ? x.accrued : 0), st.accrued); // 累计已计息合计
+    const remaining = ast.reduce((s, x) => s + (x ? x.remaining : 0), st.remaining);
     const totalForCover = ast.reduce((s, x) => s + (x ? ((x.termInterest != null && x.termInterest > 0) ? x.termInterest : x.total) : 0),
-      (st.termInterest != null && st.termInterest > 0) ? st.termInterest : st.total); // 整期总利息合计
-    const daily = ast.reduce((s, x) => s + (x ? x.daily : 0), st.daily);       // 每日新增利息合计
-    const prepayFee = remaining * rates(rec).prepay;                           // 违约金（统一按首笔费率×剩余本金合计）
+      (st.termInterest != null && st.termInterest > 0) ? st.termInterest : st.total);
+    const daily = ast.reduce((s, x) => s + (x ? x.daily : 0), st.daily);
+    const prepayFee = remaining * rates(rec).prepay;
 
-    const costNow = buy + accrued + prepayFee;      // 立刻全部还清：含截至今日利息 + 违约金
-    const costAccrued = buy + accrued;              // 覆盖累计利息（不含违约金）
-    const costTotal = buy + totalForCover;          // 持有到期：吃满各批全部整期利息
-    const breakeven = solvePrice(rec, costNow, Q);
-    const coverAccrued = solvePrice(rec, costAccrued, Q);
-    const coverAll = solvePrice(rec, costTotal, Q);
+    // ---- 卖出聚合（每笔含成交快照，历史数字不随行情变化）----
+    const soldQty = sells.reduce((s, x) => s + num(x.qty), 0);
+    const leftQty = Math.max(0, Q - soldQty);
+    const sellGross = sells.reduce((s, x) => s + num(x.gross), 0);
+    const sellFeeTotal = sells.reduce((s, x) => s + num(x.feeTotal), 0);
+    const sellNet = sells.reduce((s, x) => s + num(x.net), 0);
+    const sellPnlTotal = sells.reduce((s, x) => s + num(x.pnl), 0);            // 已实现盈亏（卖出净收入 − 分摊买入成本 − 分摊利息）
 
-    const market = curPrice ? curPrice * Q : 0;
+    // ---- 还款聚合（先息后本冲抵）----
+    const repayTotal = reps.reduce((s, x) => s + num(x.amount), 0);
+    const paidInterest = Math.min(accrued, repayTotal);                        // 先冲利息
+    const paidPrincipal = Math.max(0, repayTotal - accrued);                   // 再冲本金
+    const remainPrincipal = Math.max(0, P - paidPrincipal);
+    const remainInterest = Math.max(0, accrued - repayTotal);
+    const cleared = remainPrincipal <= 0.01 && remainInterest <= 0.01;         // 本息已还清
+    const settleFee = remainPrincipal * rates(rec).prepay;                     // 立刻结清违约金
+    const settleNeed = remainPrincipal + remainInterest + settleFee;           // 一次性结清需付总额
+
+    // ---- 成本与保本价（剩余持仓口径：已落袋的卖出净收入可抵扣成本）----
+    const costNow = buy + accrued + prepayFee;
+    const costAccrued = buy + accrued;
+    const costTotal = buy + totalForCover;
+    const leftCost = Q > 0 ? buy * (leftQty / Q) : 0;                          // 剩余持仓分摊买入成本
+    const beBase = Math.max(0, costNow - sellNet);
+    const caBase = Math.max(0, costAccrued - sellNet);
+    const ctBase = Math.max(0, costTotal - sellNet);
+    const breakeven = leftQty > 0 ? solvePrice(rec, beBase, leftQty) : 0;
+    const coverAccrued = leftQty > 0 ? solvePrice(rec, caBase, leftQty) : 0;
+    const coverAll = leftQty > 0 ? solvePrice(rec, ctBase, leftQty) : 0;
+
+    const market = (curPrice && leftQty) ? curPrice * leftQty : 0;
     const netIfSell = curPrice ? market - sellFees(rec, market) : 0;
-    const pnl = curPrice ? netIfSell - costNow : 0;
-    const drift = daily / Math.max(1, Q) / (1 - (rates(rec).comm + rates(rec).stamp + rates(rec).transfer));
+    // 总盈亏（口径：已落袋卖出净收入 + 剩余持仓现在卖出的净得 − 总成本）
+    const pnl = curPrice ? (sellNet + netIfSell - costNow) : (sellNet - costNow);
+    const drift = leftQty > 0 ? daily / Math.max(1, leftQty) / (1 - (rates(rec).comm + rates(rec).stamp + rates(rec).transfer)) : 0;
 
-    return { Q, buy, cBuy: 0, own, D, st, ast, adds, P, accrued, remaining, daily, prepayFee, totalForCover, costNow, costAccrued, costTotal, breakeven, coverAccrued, coverAll, market, netIfSell, pnl, drift, curPrice };
+    return { Q, leftQty, soldQty, buy, cBuy: 0, own, D, st, ast, adds, sells, reps, P, accrued, remaining, daily,
+      prepayFee, totalForCover, costNow, costAccrued, costTotal, breakeven, coverAccrued, coverAll, leftCost,
+      market, netIfSell, pnl, drift, curPrice, closed, endISO,
+      repayTotal, paidInterest, paidPrincipal, remainPrincipal, remainInterest, cleared, settleFee, settleNeed,
+      sellGross, sellFeeTotal, sellNet, sellPnlTotal };
   }
 
   /* ---------------- 实时行情（东方财富，已验证支持跨域） ---------------- */
@@ -883,6 +914,153 @@
     setTimeout(() => { const el = m.dialog.querySelector('#f-qty'); if (el) el.focus(); }, 50);
   }
 
+  /* ---------------- 卖出（扣费后结算，快照固化本笔盈亏） ---------------- */
+  function openSellForm(rec, onSaved) {
+    const c0 = calc(rec, null);
+    if (!c0.leftQty) { ui.toast('已无持仓可卖出', 'warn'); return; }
+    let quote = null, riskAck = false;
+    const html = ui.form([
+      { name: 'date', label: '卖出日期', type: 'date', value: todayISO(), required: true, flex: 1, row: 1 },
+      { name: 'qty', label: '卖出数量(股)', type: 'number', value: c0.leftQty, required: true, min: 1, flex: 1, row: 1 },
+      { name: 'price', label: '卖出价(元)', type: 'number', value: '', required: true, min: 0, step: 0.01, flex: 1, row: 1 }
+    ]) +
+      '<div id="f-sell-sum" class="hint muted"></div>' +
+      '<div class="hint muted">卖出费用按你的费率计算：佣金(万2.5/最低5元) + 印花税(' + num(rec.stampRate, DEF.stampRate) + '%，仅卖出) + 过户费(' + num(rec.transferRate, DEF.transferRate) + '%，双边)。剩余持仓 <b>' + c0.leftQty + '</b> 股。</div>' +
+      '<div id="f-warn" class="lev-warnbox" style="display:none"></div>';
+    const m = ui.openModal({
+      title: '卖出 · ' + (rec.stockName || rec.stockCode),
+      html: html,
+      actions: [{ label: '取消' }, {
+        label: '确认卖出', primary: true, onClick: async (close) => {
+          const g = id => m.dialog.querySelector('#f-' + id).value.trim();
+          const qty = num(g('qty'), 0), price = num(g('price'));
+          if (!(qty > 0) || !(price > 0)) { ui.toast('请填卖出数量和卖出价', 'warn'); return; }
+          if (qty > c0.leftQty + 1e-6) { ui.toast('卖出数量超过剩余持仓 ' + c0.leftQty + ' 股', 'warn'); return; }
+          if (!riskAck) {
+            const wl = sellWarn(price, quote);
+            if (!(await confirmRisky(wl))) return;
+            riskAck = true;
+          }
+          const c = calc(rec, null);
+          const gross = price * qty;
+          const f = rates(rec);
+          const comm = Math.max(gross * f.comm, f.minComm), stamp = gross * f.stamp, transfer = gross * f.transfer;
+          const feeTotal = comm + stamp + transfer;
+          const net = gross - feeTotal;
+          const costAlloc = c.Q > 0 ? c.buy * (qty / c.Q) : 0;
+          const interestAlloc = c.Q > 0 ? c.accrued * (qty / c.Q) : 0;
+          const obj = Object.assign({}, rec);
+          obj.sells = (rec.sells || []).concat([{
+            id: store.uid(), date: g('date') || todayISO(), qty: qty, price: price,
+            gross: gross, comm: comm, stamp: stamp, transfer: transfer, feeTotal: feeTotal, net: net,
+            costAlloc: costAlloc, interestAlloc: interestAlloc, pnl: net - costAlloc - interestAlloc
+          }]);
+          obj.updatedAt = Date.now();
+          await store.put('leverage', obj);
+          close();
+          if (onSaved) onSaved(obj);
+        }
+      }]
+    });
+    const sumEl = m.dialog.querySelector('#f-sell-sum');
+    const warnEl = m.dialog.querySelector('#f-warn');
+    const upd = () => {
+      const qty = num(m.dialog.querySelector('#f-qty').value), price = num(m.dialog.querySelector('#f-price').value);
+      const gross = qty * price;
+      const f = rates(rec);
+      const comm = Math.max(gross * f.comm, f.minComm), stamp = gross * f.stamp, transfer = gross * f.transfer;
+      const feeTotal = comm + stamp + transfer, net = gross - feeTotal;
+      const c = calc(rec, null);
+      const costAlloc = c.Q > 0 ? c.buy * (qty / c.Q) : 0;
+      const interestAlloc = c.Q > 0 ? c.accrued * (qty / c.Q) : 0;
+      sumEl.innerHTML = gross > 0
+        ? ('成交额 <b>' + money(gross) + '</b> － 费用 <b>' + money(feeTotal) + '</b>（佣金 ' + money(comm) + ' + 印花税 ' + money(stamp) + ' + 过户费 ' + money(transfer) + '） ＝ <b>到手 ' + money(net) + '</b><br>' +
+           '本笔分摊：买入成本 ' + money(costAlloc) + ' + 已计利息 ' + money(interestAlloc) + ' → 本笔盈亏 <b class="' + cls(net - costAlloc - interestAlloc) + '">' + money(net - costAlloc - interestAlloc) + '</b>' + (qty >= c.leftQty - 1e-6 ? '　（清仓）' : '　（剩余 ' + Math.max(0, c.leftQty - qty) + ' 股）'))
+        : '';
+      renderWarn(warnEl, sellWarn(price, quote));
+    };
+    ['f-qty', 'f-price'].forEach(id => { const el = m.dialog.querySelector('#' + id); if (el) el.addEventListener('input', upd); });
+    upd();
+    (async () => {
+      try { const q0 = await withTimeout(fetchQuote(rec.stockCode), 4000); if (q0 && q0.price) { quote = q0; upd(); } } catch (e) {}
+    })();
+    ui.bindFormValidation(m.dialog);
+    setTimeout(() => { const el = m.dialog.querySelector('#f-price'); if (el) el.focus(); }, 50);
+  }
+  // 卖出价异常提示（与买入价同一套倍数逻辑）
+  function sellWarn(price, quote) {
+    const out = [];
+    if (!(price > 0)) return out;
+    if (quote && quote.price > 0) {
+      const r = price / quote.price;
+      if (r >= CHK.priceDanger) out.push({ lv: 'danger', msg: '卖出价 ' + price.toFixed(2) + ' 是当前股价 ' + quote.price.toFixed(2) + ' 的 ' + Math.round(r) + ' 倍，很可能多填了一位' });
+      else if (r <= 1 / CHK.priceDanger) out.push({ lv: 'danger', msg: '卖出价 ' + price.toFixed(2) + ' 只有当前股价的 1/' + Math.round(1 / r) + '，很可能少填了一位' });
+      else if (r >= CHK.priceWarn) out.push({ lv: 'warn', msg: '卖出价高于当前股价（' + r.toFixed(1) + ' 倍），确认是否填错' });
+      else if (r <= 1 / CHK.priceWarn) out.push({ lv: 'warn', msg: '卖出价明显低于当前股价，确认是否填错' });
+    }
+    return out;
+  }
+
+  /* ---------------- 还款（先息后本冲抵；还清后可确认完结） ---------------- */
+  function openRepayForm(rec, onSaved) {
+    const c0 = calc(rec, null);
+    if (c0.remainPrincipal <= 0.01 && c0.remainInterest <= 0.01) { ui.toast('该笔贷款本息已还清', 'warn'); return; }
+    const html = ui.form([
+      { name: 'date', label: '还款日期', type: 'date', value: todayISO(), required: true, flex: 1, row: 1 },
+      { name: 'amount', label: '还款金额(元)', type: 'number', value: (Math.round(c0.settleNeed * 100) / 100), required: true, min: 0, step: 0.01, flex: 1, row: 1 },
+      { name: 'note', label: '备注(选填)', value: '', flex: 1, row: 2 }
+    ]) +
+      '<button type="button" class="btn ghost sm" id="f-fill-settle">填入结清所需 ' + money(c0.settleNeed) + '（含违约金 ' + money(c0.settleFee) + '）</button>' +
+      '<div id="f-repay-sum" class="hint muted" style="margin-top:8px"></div>' +
+      '<div class="hint muted">还款按「先还利息、再还本金」冲抵。全部本息还清后，系统会询问是否把这笔测算标记为「已完结」（完结后停止计息并生成结算面板）。</div>';
+    const m = ui.openModal({
+      title: '还款 · ' + (rec.stockName || rec.stockCode),
+      html: html,
+      actions: [{ label: '取消' }, {
+        label: '确认还款', primary: true, onClick: async (close) => {
+          const g = id => m.dialog.querySelector('#f-' + id).value.trim();
+          const amount = num(g('amount'));
+          if (!(amount > 0)) { ui.toast('请填写还款金额', 'warn'); return; }
+          const date = g('date') || todayISO();
+          const obj = Object.assign({}, rec);
+          obj.repayments = (rec.repayments || []).concat([{ id: store.uid(), date: date, amount: amount, note: g('note') }]);
+          obj.updatedAt = Date.now();
+          const after = calc(obj, null);
+          if (after.cleared) {
+            const yes = await ui.confirm({
+              title: '贷款本息已还清',
+              message: '还完这笔后，本金与利息已全部结清。是否将这笔测算标记为「已完结」？完结后停止计息并生成最终结算面板。',
+              confirmLabel: '确认完结'
+            });
+            if (yes) { obj.closed = true; obj.closedAt = date; }
+          }
+          await store.put('leverage', obj);
+          close();
+          if (onSaved) onSaved(obj);
+        }
+      }]
+    });
+    const sumEl = m.dialog.querySelector('#f-repay-sum');
+    const upd = () => {
+      const amount = num(m.dialog.querySelector('#f-amount').value);
+      const c = calc(rec, null);
+      const payI = Math.min(c.accrued, amount), payP = Math.max(0, amount - c.accrued);
+      const rp = Math.max(0, c.remainPrincipal - payP), ri = Math.max(0, c.remainInterest - payI);
+      const done = rp <= 0.01 && ri <= 0.01;
+      sumEl.innerHTML = amount > 0
+        ? ('本次 ' + money(amount) + '：先冲利息 <b>' + money(payI) + '</b>' + (payP > 0 ? '，再冲本金 <b>' + money(payP) + '</b>' : '') +
+           '<br>还款后剩余：本金 <b>' + money(rp) + '</b> ＋ 待付利息 <b>' + money(ri) + '</b>' + (done ? '　→ <b class="lv-up">本息已结清</b>' : ''))
+        : '';
+    };
+    const fillBtn = m.dialog.querySelector('#f-fill-settle');
+    if (fillBtn) fillBtn.onclick = () => { m.dialog.querySelector('#f-amount').value = (Math.round(calc(rec, null).settleNeed * 100) / 100); upd(); };
+    const amtEl = m.dialog.querySelector('#f-amount');
+    if (amtEl) amtEl.addEventListener('input', upd);
+    upd();
+    ui.bindFormValidation(m.dialog);
+    setTimeout(() => { if (amtEl) amtEl.focus(); }, 50);
+  }
+
   /* ---------------- 详情视图 ---------------- */
   let _timer = null, _aiTimer = null;
 
@@ -973,14 +1151,26 @@
     const beReached = c.curPrice && c.curPrice >= c.breakeven;
     const caReached = c.curPrice && c.curPrice >= c.coverAll;
     const accReached = c.curPrice && c.curPrice >= c.coverAccrued;
+    // 状态徽章与可用操作
+    const stateBadge = c.closed ? '<span class="badge lv-st-done">已完结</span>'
+      : (c.leftQty <= 0 ? '<span class="badge lv-st-sold">已清仓 · 待还款</span>'
+      : (c.reps.length ? '<span class="badge lv-st-part">部分还款</span>' : '<span class="badge lv-st-hold">持有中</span>'));
+    const showAdd = c.leftQty > 0 && !c.closed;
+    const showSell = c.leftQty > 0 && !c.closed;
+    const showRepay = c.P > 0.01 && !c.cleared;
+    const showClose = c.cleared && !c.closed;
     return '' +
       '<div class="page">' +
       '<div class="page-head">' +
         '<button class="icon-btn" id="lev-back" title="返回">' + ui.icon('chevronLeft', 20) + '</button>' +
         '<div class="page-head-main"><h1>' + ui.escapeHtml(q ? (q.name || rec.stockCode) : ('自选 ' + rec.stockCode)) + '</h1>' +
-        '<div class="page-head-sub">' + ui.escapeHtml(rec.stockCode) + (rec.loanName ? ' · ' + ui.escapeHtml(rec.loanName) : '') + '</div></div>' +
+        '<div class="page-head-sub">' + ui.escapeHtml(rec.stockCode) + (rec.loanName ? ' · ' + ui.escapeHtml(rec.loanName) : '') + ' ' + stateBadge + '</div></div>' +
         '<div class="page-head-actions">' +
-          '<button class="btn primary sm lev-addbtn">+ 加仓</button>' +
+          (showAdd ? '<button class="btn ghost sm lev-addbtn">+ 加仓</button>' : '') +
+          (showSell ? '<button class="btn primary sm lev-sellbtn">卖出</button>' : '') +
+          (showRepay ? '<button class="btn ghost sm lev-repaybtn">还款</button>' : '') +
+          (showClose ? '<button class="btn primary sm lev-closebtn">确认完结</button>' : '') +
+          (c.closed ? '<button class="btn ghost sm lev-reopenbtn">撤销完结</button>' : '') +
           '<button class="btn ghost sm" id="lev-refresh">' + ui.icon('refresh', 15) + ' 刷新</button>' +
           '<button class="btn ghost sm" id="lev-edit">' + ui.icon('pencil', 15) + ' 编辑</button>' +
         '</div>' +
@@ -1001,22 +1191,22 @@
 
       '<div class="lev-keygrid">' +
         '<div class="card section lev-key' + (accReached ? ' lv-ok' : '') + '">' +
-          '<div class="lk-label">覆盖累计日利息价 <span class="muted">到今天为止的利息</span></div>' +
-          '<div class="lk-price">' + c.coverAccrued.toFixed(2) + '</div>' +
+          '<div class="lk-label">覆盖累计日利息价 <span class="muted">' + (c.leftQty > 0 ? '剩余 ' + c.leftQty + ' 股' : '已清仓') + '</span></div>' +
+          '<div class="lk-price">' + (c.leftQty > 0 ? c.coverAccrued.toFixed(2) : '—') + '</div>' +
           '<div class="lk-gap ' + (accReached ? 'lv-up' : 'lv-down') + '">' +
-            (c.curPrice ? (accReached ? '现价已达标 ↑' : '距现价还需 ' + pct(gapAC)) : '填现价后显示') + '</div>' +
+            (c.leftQty <= 0 ? '已清仓，无剩余持仓' : (c.curPrice ? (accReached ? '现价已达标 ↑' : '距现价还需 ' + pct(gapAC)) : '填现价后显示')) + '</div>' +
         '</div>' +
         '<div class="card section lev-key' + (beReached ? ' lv-ok' : '') + '">' +
-          '<div class="lk-label">保本卖出价 <span class="muted">还清贷款+已计息不亏</span></div>' +
-          '<div class="lk-price">' + c.breakeven.toFixed(2) + '</div>' +
+          '<div class="lk-label">保本卖出价 <span class="muted">' + (c.leftQty > 0 ? '剩 ' + c.leftQty + ' 股 · 已抵扣卖出所得' : '已清仓') + '</span></div>' +
+          '<div class="lk-price">' + (c.leftQty > 0 ? c.breakeven.toFixed(2) : '—') + '</div>' +
           '<div class="lk-gap ' + (beReached ? 'lv-up' : 'lv-down') + '">' +
-            (c.curPrice ? (beReached ? '现价已达标 ↑' : '距现价还需 ' + pct(gapBE)) : '填现价后显示') + '</div>' +
+            (c.leftQty <= 0 ? '已清仓，无剩余持仓' : (c.curPrice ? (beReached ? '现价已达标 ↑' : '距现价还需 ' + pct(gapBE)) : '填现价后显示')) + '</div>' +
         '</div>' +
         '<div class="card section lev-key' + (caReached ? ' lv-ok' : '') + '">' +
-          '<div class="lk-label">覆盖总利息价 <span class="muted">吃满整期全部利息</span></div>' +
-          '<div class="lk-price">' + c.coverAll.toFixed(2) + '</div>' +
+          '<div class="lk-label">覆盖总利息价 <span class="muted">' + (c.leftQty > 0 ? '吃满整期全部利息' : '已清仓') + '</span></div>' +
+          '<div class="lk-price">' + (c.leftQty > 0 ? c.coverAll.toFixed(2) : '—') + '</div>' +
           '<div class="lk-gap ' + (caReached ? 'lv-up' : 'lv-down') + '">' +
-            (c.curPrice ? (caReached ? '现价已达标 ↑' : '距现价还需 ' + pct(gapCA)) : '填现价后显示') + '</div>' +
+            (c.leftQty <= 0 ? '已清仓，无剩余持仓' : (c.curPrice ? (caReached ? '现价已达标 ↑' : '距现价还需 ' + pct(gapCA)) : '填现价后显示')) + '</div>' +
         '</div>' +
       '</div>' +
 
@@ -1101,6 +1291,64 @@
         '<div class="hint muted">多持有一天，保本卖出价就上浮约 ' + c.drift.toFixed(3) + ' 元 —— 这就是杠杆的时间成本。原贷款利息持续累计，加仓贷款各自独立计息后合并。</div>' +
       '</div>' +
 
+      (c.sells.length ? (
+      '<div class="card section">' +
+        '<div class="sec-title">卖出记录（' + c.sells.length + ' 笔 · 共 ' + c.soldQty + ' 股）</div>' +
+        '<div class="kv-list">' +
+          c.sells.map(s => '<div class="kv"><span class="k">' + ui.escapeHtml(s.date || '') + ' · ' + num(s.qty) + ' 股 × ' + num(s.price).toFixed(2) +
+            ' <i class="muted">费 ' + money(num(s.feeTotal)) + '</i></span>' +
+            '<span class="v">到手 ' + money(num(s.net)) + ' <b class="' + cls(num(s.pnl)) + '">' + (num(s.pnl) >= 0 ? '+' : '') + money(num(s.pnl)) + '</b>' +
+            ' <button class="icon-btn lev-selldel" data-id="' + ui.escapeAttr(s.id) + '" title="删除本笔卖出">' + ui.icon('trash', 14) + '</button></span></div>').join('') +
+          '<div class="kv total"><span class="k">卖出净收入合计</span><span class="v">' + money(c.sellNet) + '</span></div>' +
+          '<div class="kv"><span class="k">卖出费用合计</span><span class="v">' + money(c.sellFeeTotal) + '</span></div>' +
+          '<div class="kv total"><span class="k">已实现盈亏</span><span class="v ' + cls(c.sellPnlTotal) + '">' + (c.sellPnlTotal >= 0 ? '+' : '') + money(c.sellPnlTotal) + '</span></div>' +
+          '<div class="kv"><span class="k">剩余持仓 / 分摊买入成本</span><span class="v">' + c.leftQty + ' 股 / ' + money(c.leftCost) + '</span></div>' +
+        '</div>' +
+        '<div class="hint muted">已实现盈亏口径 = 卖出净收入 − 该笔分摊买入成本 − 该笔分摊已计利息（按下单时快照固化，不随行情变化）。</div>' +
+      '</div>') : '') +
+
+      (c.reps.length || c.P > 0.01 ? (
+      '<div class="card section">' +
+        '<div class="sec-title">还款记录（已还 ' + money(c.repayTotal) + '）' + (c.closed ? ' · 已结清' : '') + '</div>' +
+        '<div class="kv-list">' +
+          c.reps.map(rp => '<div class="kv"><span class="k">' + ui.escapeHtml(rp.date || '') + (rp.note ? ' <i class="muted">' + ui.escapeHtml(rp.note) + '</i>' : '') + '</span>' +
+            '<span class="v">' + money(num(rp.amount)) + ' <button class="icon-btn lev-repaydel" data-id="' + ui.escapeAttr(rp.id) + '" title="删除本笔还款">' + ui.icon('trash', 14) + '</button></span></div>').join('') +
+          (c.reps.length ? '' : '<div class="muted" style="font-size:13px">暂无还款记录</div>') +
+          '<div class="kv"><span class="k">其中：已冲利息 / 已冲本金</span><span class="v">' + money(c.paidInterest) + ' / ' + money(c.paidPrincipal) + '</span></div>' +
+          '<div class="kv"><span class="k">剩余应付本金</span><span class="v lv-warn">' + money(c.remainPrincipal) + '</span></div>' +
+          '<div class="kv"><span class="k">剩余待付利息</span><span class="v lv-warn">' + money(c.remainInterest) + '</span></div>' +
+          '<div class="kv total"><span class="k">一次性结清需付' + (c.closed ? '（已结清）' : '') + '</span><span class="v">' + (c.closed ? money(0) : money(c.settleNeed)) + (c.settleFee > 0 && !c.closed ? ' <i class="muted">含违约金 ' + money(c.settleFee) + '</i>' : '') + '</span></div>' +
+        '</div>' +
+        (c.cleared && !c.closed ? '<div class="hint lv-warn">本息已还清，点上方「确认完结」结束这笔测算。</div>' : '') +
+      '</div>') : '') +
+
+      (c.closed ? (() => {
+        const holdDays = Math.max(1, c.D);
+        const netProfit = c.sellNet - c.buy - c.accrued - c.prepayFee; // 已落袋 − 总买入 − 全部利息 − 违约金
+        const roi = c.own > 0 ? netProfit / c.own * 100 : 0;           // 相对自有资金投入的收益率
+        const ann = roi * (365 / holdDays);
+        return '<div class="card section lev-final">' +
+          '<div class="sec-title">🎉 已完结 · 最终结算面板</div>' +
+          '<div class="lev-final-grid">' +
+            '<div class="lf-item"><div class="lf-k">净利润</div><div class="lf-v ' + cls(netProfit) + '">' + (netProfit >= 0 ? '+' : '') + money(netProfit) + '</div></div>' +
+            '<div class="lf-item"><div class="lf-k">收益率（对自有本金）</div><div class="lf-v ' + cls(roi) + '">' + (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%</div></div>' +
+            '<div class="lf-item"><div class="lf-k">折年化</div><div class="lf-v ' + cls(ann) + '">' + (ann >= 0 ? '+' : '') + ann.toFixed(1) + '%</div></div>' +
+            '<div class="lf-item"><div class="lf-k">持有天数</div><div class="lf-v">' + holdDays + ' 天</div></div>' +
+          '</div>' +
+          '<div class="kv-list" style="margin-top:10px">' +
+            '<div class="kv"><span class="k">总投入（买入总额）</span><span class="v">' + money(c.buy) + '</span></div>' +
+            '<div class="kv"><span class="k">└ 自有本金 / 贷款本金</span><span class="v">' + money0(c.own) + ' / ' + money0(c.P) + '</span></div>' +
+            '<div class="kv"><span class="k">卖出净收入合计</span><span class="v">' + money(c.sellNet) + '</span></div>' +
+            '<div class="kv"><span class="k">└ 卖出费用合计</span><span class="v">' + money(c.sellFeeTotal) + '</span></div>' +
+            '<div class="kv"><span class="k">贷款利息合计</span><span class="v">' + money(c.accrued) + '</span></div>' +
+            '<div class="kv"><span class="k">提前还款违约金</span><span class="v">' + money(c.prepayFee) + '</span></div>' +
+            '<div class="kv"><span class="k">剩余持仓</span><span class="v">' + c.leftQty + ' 股' + (c.leftQty > 0 && c.curPrice ? '（现值 ' + money(c.market) + '，未计入上方净利润）' : '') + '</span></div>' +
+            '<div class="kv total"><span class="k">净利润（已落袋）</span><span class="v ' + cls(netProfit) + '">' + (netProfit >= 0 ? '+' : '') + money(netProfit) + '</span></div>' +
+          '</div>' +
+          '<div class="hint muted">结算口径：卖出净收入 − 买入总额 − 全部贷款利息 − 违约金。若仍有剩余持仓未卖出，其市值未计入净利润，可继续卖出或手动撤销完结后记录。</div>' +
+        '</div>';
+      })() : '') +
+
       '<div class="lev-disclaimer">本模块仅做成本与盈亏平衡测算，不构成任何投资建议。信贷资金按规定不得用于证券投资，请自行评估合规风险。</div>' +
       '</div>';
   }
@@ -1152,6 +1400,47 @@
       root.querySelector('#lev-edit').onclick = () => openForm(rec, () => openDetail(root, rec));
       const addBtns = root.querySelectorAll('.lev-addbtn');
       addBtns.forEach(b => { b.onclick = () => openAddForm(rec, () => { ui.toast('已加仓，持仓与利息已合并重算'); openDetail(root, rec); }); });
+      const sellBtn = root.querySelector('.lev-sellbtn');
+      if (sellBtn) sellBtn.onclick = () => openSellForm(rec, () => { ui.toast('已记录卖出'); openDetail(root, rec); });
+      const repayBtn = root.querySelector('.lev-repaybtn');
+      if (repayBtn) repayBtn.onclick = () => openRepayForm(rec, () => { ui.toast('已记录还款'); openDetail(root, rec); });
+      const closeBtn = root.querySelector('.lev-closebtn');
+      if (closeBtn) closeBtn.onclick = async () => {
+        if (await ui.confirm({ title: '确认完结', message: '确认将这笔测算标记为「已完结」？完结后停止计息并生成最终结算面板。', confirmLabel: '确认完结' })) {
+          rec.closed = true; rec.closedAt = todayISO(); rec.updatedAt = Date.now();
+          await store.put('leverage', rec);
+          ui.toast('已完结，生成结算面板');
+          openDetail(root, rec);
+        }
+      };
+      const reopenBtn = root.querySelector('.lev-reopenbtn');
+      if (reopenBtn) reopenBtn.onclick = async () => {
+        if (await ui.confirm({ title: '撤销完结', message: '撤销后将恢复计息（从原起息日累计到今天），确定吗？', confirmLabel: '撤销完结', danger: true })) {
+          rec.closed = false; delete rec.closedAt; rec.updatedAt = Date.now();
+          await store.put('leverage', rec);
+          openDetail(root, rec);
+        }
+      };
+      root.querySelectorAll('.lev-selldel').forEach(b => {
+        b.onclick = async () => {
+          if (await ui.confirm({ title: '删除卖出记录', message: '删除这笔卖出记录后，持仓与已实现盈亏会重新计算，确定吗？', confirmLabel: '删除', danger: true })) {
+            rec.sells = (rec.sells || []).filter(x => x.id !== b.dataset.id);
+            rec.updatedAt = Date.now();
+            await store.put('leverage', rec);
+            openDetail(root, rec);
+          }
+        };
+      });
+      root.querySelectorAll('.lev-repaydel').forEach(b => {
+        b.onclick = async () => {
+          if (await ui.confirm({ title: '删除还款记录', message: '删除后剩余应付会重新计算，确定吗？', confirmLabel: '删除', danger: true })) {
+            rec.repayments = (rec.repayments || []).filter(x => x.id !== b.dataset.id);
+            rec.updatedAt = Date.now();
+            await store.put('leverage', rec);
+            openDetail(root, rec);
+          }
+        };
+      });
       root.querySelectorAll('.lev-adddel').forEach(b => {
         b.onclick = async () => {
           const idx = parseInt(b.dataset.idx, 10);
@@ -1254,21 +1543,25 @@
         const rateTxt = c.st.rateSource === 'manual' ? num(r.dailyRate).toFixed(4) + '%/日'
           : (c.st.rateSource === 'implied' ? c.st.impliedAnnual.toFixed(2) + '%'
           : (num(r.annualRate) ? num(r.annualRate).toFixed(2) + '%' : '按总利息'));
-        return '<div class="card lev" data-id="' + r.id + '">' +
+        return '<div class="card lev' + (r.closed ? ' lev-closed' : '') + '" data-id="' + r.id + '">' +
           '<div class="lev-main">' +
             '<div class="lev-title">' + ui.escapeHtml(r.loanName || '贷款') +
-              ' <span class="muted">→ ' + ui.escapeHtml(r.stockName ? (r.stockName + ' ' + r.stockCode) : r.stockCode) + '</span></div>' +
+              ' <span class="muted">→ ' + ui.escapeHtml(r.stockName ? (r.stockName + ' ' + r.stockCode) : r.stockCode) + '</span>' +
+              (r.closed ? ' <span class="badge lv-st-done">已完结</span>' : (c.leftQty <= 0 ? ' <span class="badge lv-st-sold">已清仓</span>' : (c.reps && c.reps.length ? ' <span class="badge lv-st-part">部分还款</span>' : ''))) + '</div>' +
             '<div class="lev-nums">' +
               '<span>贷 <b>' + money0(c.P) + '</b></span>' +
               '<span>自有 <b>' + money0(c.own) + '</b></span>' +
               '<span>均价 <b>' + (c.Q ? (c.buy / c.Q).toFixed(2) : '—') + '</b></span>' +
-              '<span>保本 <b class="lv-warn">' + c.breakeven.toFixed(2) + '</b></span>' +
-              '<span>覆息 <b class="lv-danger">' + c.coverAll.toFixed(2) + '</b></span>' +
+              '<span>保本 <b class="lv-warn">' + (c.leftQty > 0 ? c.breakeven.toFixed(2) : '—') + '</b></span>' +
+              (c.sells.length ? '<span>已实现 <b class="' + cls(c.sellPnlTotal) + '">' + (c.sellPnlTotal >= 0 ? '+' : '') + money0(c.sellPnlTotal) + '</b></span>'
+                : '<span>覆息 <b class="lv-danger">' + (c.leftQty > 0 ? c.coverAll.toFixed(2) : '—') + '</b></span>') +
             '</div>' +
             '<div class="lev-sub muted">' + METHOD[r.method || 'daily'] + ' · ' + rateTxt +
               (c.st.rateSource === 'implied' ? ' (反推)' : '') +
               (c.adds && c.adds.length ? ' · 加仓 ' + c.adds.length + ' 次' : '') +
-              ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.daily) + '</div>' +
+              (c.sells.length ? ' · 已卖 ' + c.soldQty + '/' + c.Q + ' 股' : '') +
+              (c.reps.length ? ' · 已还 ' + money0(c.repayTotal) : '') +
+              (c.closed ? ' · 已结清' : ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.daily)) + '</div>' +
           '</div>' +
           '<div class="row-actions">' +
             '<button class="btn ghost sm lev-listadd" title="给这只股票加仓">＋加仓</button>' +
