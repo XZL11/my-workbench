@@ -243,14 +243,29 @@
     return loanState(ar, daysBetween(ar.startDate, endISO));
   }
 
-  // 聚合计算：持仓合并（总股数/总买入额），各批贷款独立计息后累计；含卖出/还款/结清。
-  // 关键原则：原贷款利息不因加仓被清除/重算；结清后利息停止累计；还款按「先息后本」冲抵。
-  function calc(rec, curPrice) {
+    // 聚合计算：持仓合并（总股数/总买入额），各批贷款独立计息后累计；含卖出/还款/结清。
+    // 计息口径（重要）：
+    //   ① 卖出不影响计息 —— 卖出后只要还没还款，贷款继续按日/按各批规则计息；
+    //   ② 已还清本息（cleared）→ 利息冻结在最后一次还款日，不再新增；
+    //   ③ 已完结（closed）→ 利息停在结清日。
+    function calc(rec, curPrice) {
     const adds = Array.isArray(rec.adds) ? rec.adds : [];
     const sells = Array.isArray(rec.sells) ? rec.sells : [];
     const reps = Array.isArray(rec.repayments) ? rec.repayments : [];
     const closed = !!rec.closed;
-    const endISO = closed ? (rec.closedAt || rec.buyDate || todayISO()) : undefined; // 结清后停止计息
+    let endISO = closed ? (rec.closedAt || rec.buyDate || todayISO()) : undefined;
+    // 未完结但已还清：先用「到今天」口径判断是否还清，是则把计息冻结在最后一次还款日
+    if (!closed && reps.length) {
+      const stT = loanState(rec, daysBetween(rec.startDate));
+      const astT = adds.map(a => addState(a, rec));
+      const PT = astT.reduce((s, x) => s + (x ? x.P : 0), stT.P);
+      const accrT = astT.reduce((s, x) => s + (x ? x.accrued : 0), stT.accrued);
+      const repayT = reps.reduce((s, x) => s + num(x.amount), 0);
+      if (repayT >= PT + accrT - 0.01) {
+        const lastRepay = reps.slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))).slice(-1)[0];
+        endISO = (lastRepay && lastRepay.date) ? lastRepay.date : todayISO();
+      }
+    }
     const baseQ = num(rec.quantity, 0);
     const Q = adds.reduce((s, a) => s + num(a.qty), baseQ);                    // 总股数（含已卖出）
     const buy = adds.reduce((s, a) => s + num(a.price) * num(a.qty), num(rec.buyPrice) * baseQ); // 总买入额
@@ -1155,8 +1170,9 @@
     const stateBadge = c.closed ? '<span class="badge lv-st-done">已完结</span>'
       : (c.leftQty <= 0 ? '<span class="badge lv-st-sold">已清仓 · 待还款</span>'
       : (c.reps.length ? '<span class="badge lv-st-part">部分还款</span>' : '<span class="badge lv-st-hold">持有中</span>'));
-    const showAdd = c.leftQty > 0 && !c.closed;
-    const showSell = c.leftQty > 0 && !c.closed;
+    // 已卖出过 → 进入收尾阶段：头部只留「还款」，加仓/卖出收起（继续卖出走卖出记录卡里的次级入口）
+    const showAdd = c.sells.length === 0 && c.leftQty > 0 && !c.closed;
+    const showSell = c.sells.length === 0 && c.leftQty > 0 && !c.closed;
     const showRepay = c.P > 0.01 && !c.cleared;
     const showClose = c.cleared && !c.closed;
     return '' +
@@ -1293,7 +1309,8 @@
 
       (c.sells.length ? (
       '<div class="card section">' +
-        '<div class="sec-title">卖出记录（' + c.sells.length + ' 笔 · 共 ' + c.soldQty + ' 股）</div>' +
+        '<div class="sec-title">卖出记录（' + c.sells.length + ' 笔 · 共 ' + c.soldQty + ' 股）' +
+          (c.leftQty > 0 && !c.closed ? '<button class="btn ghost sm lev-sellbtn" style="float:right;margin-top:-2px">继续卖出剩余 ' + c.leftQty + ' 股</button>' : '') + '</div>' +
         '<div class="kv-list">' +
           c.sells.map(s => '<div class="kv"><span class="k">' + ui.escapeHtml(s.date || '') + ' · ' + num(s.qty) + ' 股 × ' + num(s.price).toFixed(2) +
             ' <i class="muted">费 ' + money(num(s.feeTotal)) + '</i></span>' +
@@ -1306,6 +1323,8 @@
         '</div>' +
         '<div class="hint muted">已实现盈亏口径 = 卖出净收入 − 该笔分摊买入成本 − 该笔分摊已计利息（按下单时快照固化，不随行情变化）。</div>' +
       '</div>') : '') +
+
+      (c.sells.length && !c.cleared && c.P > 0.01 ? '<div class="hint lv-warn" style="margin:0 0 10px">股票已卖出，但贷款还没还 —— 在还款完成前，利息仍按原贷款规则继续累计（下方「已产生利息」会持续增加）。</div>' : '') +
 
       (c.reps.length || c.P > 0.01 ? (
       '<div class="card section">' +
@@ -1400,8 +1419,7 @@
       root.querySelector('#lev-edit').onclick = () => openForm(rec, () => openDetail(root, rec));
       const addBtns = root.querySelectorAll('.lev-addbtn');
       addBtns.forEach(b => { b.onclick = () => openAddForm(rec, () => { ui.toast('已加仓，持仓与利息已合并重算'); openDetail(root, rec); }); });
-      const sellBtn = root.querySelector('.lev-sellbtn');
-      if (sellBtn) sellBtn.onclick = () => openSellForm(rec, () => { ui.toast('已记录卖出'); openDetail(root, rec); });
+      root.querySelectorAll('.lev-sellbtn').forEach(b => { b.onclick = () => openSellForm(rec, () => { ui.toast('已记录卖出'); openDetail(root, rec); }); });
       const repayBtn = root.querySelector('.lev-repaybtn');
       if (repayBtn) repayBtn.onclick = () => openRepayForm(rec, () => { ui.toast('已记录还款'); openDetail(root, rec); });
       const closeBtn = root.querySelector('.lev-closebtn');
@@ -1562,9 +1580,17 @@
               (c.sells.length ? ' · 已卖 ' + c.soldQty + '/' + c.Q + ' 股' : '') +
               (c.reps.length ? ' · 已还 ' + money0(c.repayTotal) : '') +
               (c.closed ? ' · 已结清' : ' · 第 ' + c.D + ' 天 · 日息 ' + money(c.daily)) + '</div>' +
+            // 卡片底部操作区：未卖出→加仓/卖出；已卖出或已清仓→只留还款（与详情页一致）
+            (() => {
+              if (c.sells.length === 0 && c.leftQty > 0 && !c.closed) {
+                return '<div class="lev-ops"><button class="btn ghost sm lev-listadd">＋加仓</button>' +
+                  '<button class="btn primary sm lev-listsell">卖出</button></div>';
+              }
+              if (c.P > 0.01 && !c.cleared) return '<div class="lev-ops"><button class="btn primary sm lev-listrepay">还款</button></div>';
+              return '';
+            })() +
           '</div>' +
           '<div class="row-actions">' +
-            '<button class="btn ghost sm lev-listadd" title="给这只股票加仓">＋加仓</button>' +
             '<button class="icon-btn del" title="删除">' + ui.icon('trash', 16) + '</button>' +
           '</div>' +
         '</div>';
@@ -1588,6 +1614,16 @@
       if (e.target.closest('.lev-listadd')) {
         const r = recs.find(x => x.id === id);
         if (r) openAddForm(r, () => { ui.toast('已加仓，持仓与利息已合并重算'); reload(); });
+        return;
+      }
+      if (e.target.closest('.lev-listsell')) {
+        const r = recs.find(x => x.id === id);
+        if (r) openSellForm(r, () => { ui.toast('已记录卖出'); reload(); });
+        return;
+      }
+      if (e.target.closest('.lev-listrepay')) {
+        const r = recs.find(x => x.id === id);
+        if (r) openRepayForm(r, () => { ui.toast('已记录还款'); reload(); });
         return;
       }
       const rec = recs.find(r => r.id === id);
