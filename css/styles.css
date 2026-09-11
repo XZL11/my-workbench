@@ -1817,3 +1817,18 @@ html.spidey-pixel .ai-brief-title .pi { color: #7dd3fc; }
   .card.lev .row-actions { align-self: flex-start; }
   .lev-ops .btn { min-width: 0; }
 }
+
+/* ===== 杠杆测算 · 按钮尺寸统一 + 列表按钮靠右 ===== */
+.page-head-actions { align-items: center; }
+.page-head-actions .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-height: 30px; padding: 5px 10px; font-size: 12.5px; line-height: 1; box-sizing: border-box;
+}
+.page-head-actions .btn svg { width: 14px; height: 14px; flex: 0 0 auto; }
+/* 列表卡片：按钮小尺寸、靠最右，不拉伸占满 */
+.lev-ops { justify-content: flex-end; }
+.lev-ops .btn { flex: 0 0 auto; min-width: 0; padding: 4px 10px; font-size: 12px; min-height: 28px; }
+@media (max-width: 640px) {
+  .page-head-actions .btn { min-height: 28px; padding: 4px 8px; font-size: 12px; }
+  .lev-ops { justify-content: flex-end; }
+}
