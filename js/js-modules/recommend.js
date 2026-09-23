@@ -52,7 +52,6 @@
 
   let _cache = null;
   let usedMap = {}; // 选题「已使用」状态：{ "日期__id": true }
-  let adsCache = []; // 广告位（用户提供的橱窗商品，结合特性撰写，多份备用）
 
   // 「已使用」状态持久化到 meta 仓库（随用户私有数据，刷新后保留）
   function usedKey(date, id) { return (date || '') + '__' + (id || ''); }
@@ -129,25 +128,6 @@
       </div>`).join('');
   }
 
-  // 广告位：用户提供的橱窗商品，作为带商品标签的普通选题注入日期列表（与养生选题同外观，无独立卡片）
-  async function loadAds() {
-    try {
-      const r = await fetch('./data/ads.json', { cache: 'no-store' });
-      if (!r.ok) return;
-      const d = await r.json();
-      adsCache = Array.isArray(d.ads) ? d.ads : [];
-    } catch (e) { adsCache = []; }
-  }
-  // 把广告位商品映射成选题结构（id / title=商品名 / tags 含商品话题 / copies），与养生选题一起按日期渲染
-  function adsAsTopics() {
-    return adsCache.map(ad => ({
-      id: ad.id,
-      title: ad.product || '商品',
-      tags: ad.tags || [],
-      copies: ad.copies || []
-    }));
-  }
-
   function topicHTML(t, date, used) {
     return `<div class="card reco ${used ? 'used' : ''}" data-id="${ui.escapeHtml(t.id)}" data-date="${ui.escapeHtml(date)}">
       <input type="checkbox" class="chk" ${used ? 'checked' : ''} title="标记为已使用">
@@ -168,7 +148,6 @@
   async function render(root) {
     const full = await _load();
     await loadUsed(); // 载入「已使用」标记
-    await loadAds(); // 载入广告位（作为带商品标签的普通选题并入日期列表）
     const days = sortDays(full.days);
 
     root.innerHTML = ui.pageHead('bulb', '选题推荐', {
@@ -198,11 +177,9 @@
 
     let current = days[0];
 
-    let topicsAll = []; // 当前日期选题 + 广告位商品（作为带商品标签的普通选题并入，按日期展示）
-
     function paint(filter) {
       filter = (filter || '').trim().toLowerCase();
-      const topics = topicsAll.filter(t => {
+      const topics = (current.topics || []).filter(t => {
         if (!filter) return true;
         if ((t.title || '').toLowerCase().includes(filter)) return true;
         return (t.tags || []).some(tag => tag.toLowerCase().includes(filter));
@@ -212,10 +189,9 @@
 
     function setDay(date) {
       current = days.find(d => d.date === date) || days[0];
-      topicsAll = (current.topics || []).concat(adsAsTopics()); // 广告作为普通选题并入，标签注明商品，无独立卡片
       const hist = days.length > 1 ? ` · 历史共 ${days.length} 天` : '';
       if (full._fallback) metaEl.innerHTML = '<span class="muted">（离线兜底示例，联网后显示当日最新选题）</span>';
-      else metaEl.innerHTML = `<span class="muted">${ui.escapeHtml(current.date || '')} · 共 ${topicsAll.length} 个选题${hist}</span>`;
+      else metaEl.innerHTML = `<span class="muted">${ui.escapeHtml(current.date || '')} · 共 ${(current.topics || []).length} 个选题${hist}</span>`;
       paint(searchEl.value);
     }
 
@@ -237,9 +213,9 @@
       }
       const one = e.target.closest('.copy-one');
       if (one) { copyText(decodeURIComponent(one.dataset.copy), '文案已复制'); return; }
-      const all = e.target.closest('.copy-all');
-      if (all) {
-        const t = topicsAll.find(x => x.id === all.dataset.id);
+        const all = e.target.closest('.copy-all');
+        if (all) {
+          const t = (current.topics || []).find(x => x.id === all.dataset.id);
         if (!t) return;
         const grouped = (t.copies || []).map((c, i) => `【第${i + 1}组｜上格】${c.top}\n【下格】${c.bottom}`).join('\n\n');
         const tail = (t.tags || []).join(' ');
