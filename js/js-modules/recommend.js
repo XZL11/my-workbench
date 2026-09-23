@@ -52,6 +52,7 @@
 
   let _cache = null;
   let usedMap = {}; // 选题「已使用」状态：{ "日期__id": true }
+  let adsCache = []; // 广告位（用户提供的橱窗商品，结合特性撰写，多份备用）
 
   // 「已使用」状态持久化到 meta 仓库（随用户私有数据，刷新后保留）
   function usedKey(date, id) { return (date || '') + '__' + (id || ''); }
@@ -126,6 +127,58 @@
           <button class="btn ghost xs copy-one" data-copy="${encodeURIComponent(c.bottom || '')}">复制</button>
         </div>
       </div>`).join('');
+  }
+
+  // 广告卡：复用上下格结构，带「广告」标识、商品名标签、橱窗链接与价格
+  function adHTML(ad) {
+    const link = ad.productLink || '';
+    return `<div class="card reco ad" data-id="ad__${ui.escapeHtml(ad.id)}">
+      <div class="reco-body">
+        <div class="reco-head">
+          <div class="reco-title">${ui.escapeHtml(ad.product || '商品')} <span class="badge ad-badge">广告</span></div>
+          <div class="reco-head-actions">
+            ${link ? `<a class="btn ghost xs" href="${ui.escapeHtml(link)}" target="_blank" rel="noopener">橱窗</a>` : ''}
+            <button class="btn primary xs copy-all" data-id="ad__${ui.escapeHtml(ad.id)}">复制全部</button>
+          </div>
+        </div>
+        <div class="reco-tags">${tagsHTML(ad.tags)}</div>
+        <div class="reco-copies">${copiesHTML(ad.copies)}</div>
+        ${ad.price ? `<div class="reco-price">${ui.escapeHtml(ad.price)}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // 加载广告位（与选题同日展示，但不随日期过滤；多份备用文案全部列出供挑选）
+  async function renderAds(root) {
+    try {
+      const r = await fetch('./data/ads.json', { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json();
+      adsCache = Array.isArray(d.ads) ? d.ads : [];
+    } catch (e) { adsCache = []; }
+    if (!adsCache.length) return;
+    const head = document.createElement('div');
+    head.className = 'reco-ads-head';
+    head.textContent = '橱窗好物 · 广告（多份备用，标签注明商品）';
+    const wrap = document.createElement('div');
+    wrap.className = 'reco-list';
+    wrap.innerHTML = adsCache.map(adHTML).join('');
+    root.appendChild(head);
+    root.appendChild(wrap);
+    // 广告卡复制逻辑（与选题列表独立的事件委托）
+    wrap.addEventListener('click', e => {
+      const one = e.target.closest('.copy-one');
+      if (one) { copyText(decodeURIComponent(one.dataset.copy), '文案已复制'); return; }
+      const all = e.target.closest('.copy-all');
+      if (all) {
+        const id = (all.dataset.id || '').replace(/^ad__/, '');
+        const ad = adsCache.find(x => x.id === id);
+        if (!ad) return;
+        const grouped = (ad.copies || []).map((c, i) => `【第${i + 1}组｜上格】${c.top}\n【下格】${c.bottom}`).join('\n\n');
+        const tail = (ad.tags || []).join(' ');
+        copyText(`${ad.product}\n\n${grouped}\n\n${tail}`, '整组文案已复制');
+      }
+    });
   }
 
   function topicHTML(t, date, used) {
@@ -222,6 +275,7 @@
         copyText(`${t.title}\n\n${grouped}\n\n${tail}`, '整组文案已复制');
       }
     });
+    renderAds(root); // 注入橱窗广告位（广告标识 + 商品名标签）
   }
 
   WB.recommend = { render, getDaily, _load, getUsedMap: loadUsed };
