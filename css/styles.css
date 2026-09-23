@@ -1167,6 +1167,12 @@ body {
 /* 首页选题面板：已使用的小项也做弱化呈现 */
 .reco-mini.used .rm-title { text-decoration: line-through; opacity: .55; }
 .reco-mini.used { background: color-mix(in srgb, var(--surface) 88%, #9ca3af); }
+.reco-ads-head { margin: 24px 0 12px; font-size: 14px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.reco-ads-head::before { content: ''; width: 4px; height: 16px; background: var(--danger); border-radius: 2px; }
+.ad-badge { background: rgba(229,72,77,.14); color: var(--danger); }
+.card.reco.ad { border-color: color-mix(in srgb, var(--danger) 32%, var(--border)); }
+.card.reco.ad .reco-title { display: flex; align-items: center; gap: 8px; }
+.reco-price { margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--danger); }
 .reco-mini .rm-used { font-size: 11px; font-weight: 700; color: #16a34a; flex: 0 0 auto; }
 
 
